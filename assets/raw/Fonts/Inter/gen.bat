@@ -1,0 +1,12 @@
+msdf-atlas-gen.exe ^
+  -font "static/Inter_24pt-Bold.ttf" ^
+  -charset "charset.txt" ^
+  -type mtsdf ^
+  -size 64 ^
+  -pxrange 2 ^
+  -yorigin top ^
+  -potr ^
+  -pxalign on ^
+  -format png ^
+  -imageout inter_atlas.png ^
+  -json inter_atlas.json

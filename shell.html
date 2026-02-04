@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>WebGPU</title>
+	<link rel="icon" href="data:;base64,=">
+  <style>
+    body { 
+      margin: 0; 
+      background-color: #111;
+      overflow: hidden;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+    }
+    canvas.emscripten { 
+      border: 0px none; 
+      background-color: black;
+      display: block;
+			outline: none;
+
+			width: 100%;
+      height: 100%;
+      image-rendering: pixelated;
+      image-rendering: crisp-edges;
+    }
+  </style>
+</head>
+<body>
+	<canvas class="emscripten" id="canvas" oncontextmenu="event.preventDefault()"></canvas>
+  <script type='text/javascript'>
+    var Module = { 
+		  canvas: (function() {
+      	return document.getElementById('canvas');
+      })(),
+
+      print: (function() {
+        return function(text) {
+        	if (arguments.length > 1) text = Array.prototype.slice.call(arguments).join(' ');
+		  		console.log(text);
+        };
+      })(),
+
+      printErr: (function() {
+        return function(text) {
+        if (arguments.length > 1) text = Array.prototype.slice.call(arguments).join(' ');
+        console.error(text);
+      	};
+      })(),
+        
+      postRun: [function() {
+        document.getElementById('canvas').focus();
+      }]
+    };
+
+		var keyMap = {
+			"KeyA": 1, "KeyB": 2, "KeyC": 3, "KeyD": 4, "KeyE": 5,
+			"KeyF": 6, "KeyG": 7, "KeyH": 8, "KeyI": 9, "KeyJ": 10,
+			"KeyK": 11, "KeyL": 12, "KeyM": 13, "KeyN": 14,
+			"KeyO": 15, "KeyP": 16, "KeyQ": 17, "KeyR": 18,
+			"KeyS": 19, "KeyT": 20, "KeyU": 21, "KeyV": 22,
+			"KeyW": 23, "KeyX": 24, "KeyY": 25, "KeyZ": 26,
+			"Digit0": 27, "Digit1": 28, "Digit2": 29, "Digit3": 30,
+			"Digit4": 31, "Digit5": 32, "Digit6": 33, "Digit7": 34,
+			"Digit8": 35, "Digit9": 36,
+			"Numpad0": 27, "Numpad1": 28, "Numpad2": 29, "Numpad3": 30,
+			"Numpad4": 31, "Numpad5": 32, "Numpad6": 33, "Numpad7": 34,
+			"Numpad8": 35, "Numpad9": 36,
+			"Space": 37, "Enter": 38, "Escape": 39, "Backspace": 40,
+      "Tab": 41, "ShiftLeft": 42, "ShiftRight": 42,
+      "ControlLeft": 43, "ControlRight": 43,
+      "AltLeft": 44, "AltRight": 44,
+      "ArrowUp": 45, "ArrowDown": 46,
+      "ArrowLeft": 47, "ArrowRight": 48
+		};
+
+		window.addEventListener('keydown', function(e) {
+    	var keyId = keyMap[e.code] || 0; // 0 = None
+    	if (keyId > 0) Module['_JSOnKeyDown'](keyId);
+		});
+
+		window.addEventListener('keyup', function(e) {
+    	var keyId = keyMap[e.code] || 0;
+    	if (keyId > 0) Module['_JSOnKeyUp'](keyId);
+		});
+
+  </script>
+    {{{ SCRIPT }}}
+</body>
+</html>
