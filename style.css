@@ -1,0 +1,193 @@
+:root {
+  --bg-color: #111;
+  --card-bg: #1a1a1a;
+  --text-color: #eee;
+  --accent: #007bff;
+}
+
+body {
+  margin: 0;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  background-color: var(--bg-color);
+  color: var(--text-color);
+}
+
+/* Navigation */
+nav {
+  background-color: #000;
+  padding: 1rem;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  border-bottom: 1px solid #333;
+}
+
+.nav-container {
+  max-width: 1200px;
+  margin: 0 auto;
+  display: flex;
+  gap: 1rem;
+}
+
+.tab-btn {
+  background: none;
+  border: none;
+  color: #888;
+  font-size: 1.1rem;
+  cursor: pointer;
+  padding: 0.5rem 1rem;
+  transition: color 0.2s;
+}
+
+.tab-btn:hover, .tab-btn.active {
+  color: #fff;
+  border-bottom: 2px solid var(--accent);
+}
+
+.tab-content {
+  display: none;
+  max-width: 1200px;
+  margin: 2rem auto;
+  padding: 0 1rem;
+  animation: fadeIn 0.3s ease;
+}
+
+.tab-content.active {
+  display: block;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Grid */
+.grid-container {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 2rem;
+}
+
+.grid-container.compact {
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 1.5rem;
+}
+
+/* Cards (Generic) */
+.card {
+  background-color: var(--card-bg);
+  border-radius: 8px;
+  overflow: hidden;
+  text-decoration: none;
+  color: inherit;
+  transition: transform 0.2s;
+  display: flex;
+  flex-direction: column;
+}
+
+.card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 5px 15px rgba(0,0,0,0.5);
+}
+
+.thumb {
+  width: 100%;
+  aspect-ratio: 16/9;
+	background-size: 100% 100%;
+  background-position: center;
+  background-color: #333;
+  position: relative;
+	border-radius: 4px 4px 0 0;
+}
+
+.poster-thumb {
+  aspect-ratio: 2/3;
+	background-size: cover;
+}
+
+.card-info {
+  padding: 1rem;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.card-info h3 {
+  margin: 0 0 0.5rem 0;
+  font-size: 1.2rem;
+}
+
+.card-info .author {
+  font-size: 0.9rem;
+  color: #888;
+  display: block;
+  margin-bottom: 0.5rem;
+}
+
+.rating {
+  color: #ffd700;
+  letter-spacing: 2px;
+  font-size: 1.1rem;
+}
+
+/* Game Card Specifics */
+.play-overlay {
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.card:hover .play-overlay {
+  opacity: 1;
+}
+
+.play-overlay i {
+  font-size: 3rem;
+  color: #fff;
+  filter: drop-shadow(0 0 10px rgba(0,0,0,0.8));
+}
+
+.game-header {
+  display: flex;
+	justify-content: space-between;
+	flex-direction: row;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+}
+
+.game-header h3 {
+  margin: 0;
+  text-align: left;
+	white-space: nowrap;
+}
+
+.game-badges {
+  display: flex;
+  gap: 12px;
+  color: #aaa;
+  justify-content: center;
+  font-size: 1.1rem;
+	margin-left: auto;
+}
+
+.profile-section {
+  display: flex;
+  align-items: center;
+  gap: 2rem;
+  margin-bottom: 3rem;
+}
+
+.profile-pic {
+  width: 150px;
+  height: 150px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 3px solid var(--accent);
+}
