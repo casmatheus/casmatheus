@@ -2,9 +2,18 @@ MODE ?= debug
 SRC_DIR := src
 OBJ_BASE_DIR := objs
 OBJ_DIR := $(OBJ_BASE_DIR)/$(MODE)
-BIN_DIR := bin
-ASSETS_DIR := assets/cooked
-EXE     := $(BIN_DIR)/index.html
+WEBSITE_DIR := website
+
+ifeq ($(MODE), release)
+  OUTPUT_ROOT := $(WEBSITE_DIR)
+  GAMES_DIR   := $(WEBSITE_DIR)/games
+else
+  OUTPUT_ROOT := bin
+  GAMES_DIR   := bin/games
+endif
+
+ASSETS_SRC := assets/cooked
+ASSETS_DEST := $(OUTPUT_ROOT)/Assets
 
 WARNINGS := -Wno-gnu-zero-variadic-macro-arguments \
             -Wno-language-extension-token -Wno-nested-anon-types \
@@ -41,29 +50,30 @@ else ifeq ($(MODE), release)
               -s DISABLE_EXCEPTION_CATCHING=1
 endif
 
-SRCS := $(shell find src -name "*.cpp")
-OBJS := $(SRCS:%.cpp=$(OBJ_DIR)/%.o)
-DEPS := $(OBJS:.o=.d)
+ENGINE_SRCS := $(shell find src -mindepth 2 -name "*.cpp")
+ENGINE_OBJS := $(ENGINE_SRCS:%.cpp=$(OBJ_DIR)/%.o)
 
-ASSET_SRCS := $(shell if [ -d "$(ASSETS_DIR)" ]; then find $(ASSETS_DIR) -type f; fi)
-ASSET_DESTS := $(patsubst $(ASSETS_DIR)/%,$(BIN_DIR)/%,$(ASSET_SRCS))
+GAME_SRCS := $(shell find src -maxdepth 1 -name "*.cpp")
+GAMES := $(patsubst src/%.cpp,%,$(GAME_SRCS))
+GAME_TARGETS := $(foreach g,$(GAMES),$(GAMES_DIR)/$g/index.html)
+
+ASSET_SRCS := $(shell if [ -d "$(ASSETS_SRC_DIR)" ]; then find $(ASSETS_SRC_DIR) -type f; fi)
+ASSET_DESTS := $(patsubst $(ASSETS_SRC_DIR)/%,$(ASSETS_DEST_DIR)/%,$(ASSET_SRCS))
 
 .PHONY: all clean run assets
 
-all: $(EXE) assets
-
-$(EXE): $(OBJS) shell.html
-	@echo [LINK] $@
-	@mkdir -p $(@D)
-	@$(CXX) $(CXXFLAGS) $(OBJS) -o $@ $(LDFLAGS)
+all: $(GAME_TARGETS) assets
 
 assets: $(ASSET_DESTS)
-
-$(BIN_DIR)/%: $(ASSETS_DIR)/%
-	@echo [COPY] $*
+$(ASSETS_DEST_DIR)/%: $(ASSETS_SRC_DIR)/%
+	@echo [COPY] $<
 	@mkdir -p $(@D)
 	@cp $< $@
 
+$(GAMES_DIR)/%/index.html: src/%.cpp $(ENGINE_OBJS) $(SHELL_FILE)
+	@echo [LINK] $* "($(MODE))"
+	@mkdir -p $(@D)
+	@$(CXX) $(CXXFLAGS) $< $(ENGINE_OBJS) -o $@ $(LDFLAGS)
 
 $(OBJ_DIR)/%.o: %.cpp
 	@mkdir -p $(@D)
@@ -71,11 +81,17 @@ $(OBJ_DIR)/%.o: %.cpp
 	@$(CXX) $(CXXFLAGS) -MMD -MP -c $< -o $@
 
 clean:
-	@echo [CLEAN] Removing artifacts...
+	@echo [CLEAN] Removing builds...
+	@rm -rf $(OBJ_BASE_DIR)
+	@rm -rf bin
+	@rm -rf $(WEBSITE_DIR)/games
 	@rm -rf $(OBJ_BASE_DIR) $(BIN_DIR)
 
 run: all
-	@echo [RUN]
-	@python -m http.server 8000 --directory $(BIN_DIR)
+ifeq ($(MODE), release)
+	@python -m http.server 8000 --directory $(WEBSITE_DIR)
+else
+	@python -m http.server 8000 --directory $(OUTPUT_ROOT)
+endif
 
--include $(DEPS)
+-include $(ENGINE_OBJS:.o=.d)
