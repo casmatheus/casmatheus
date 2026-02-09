@@ -9,8 +9,8 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 
-constexpr u32 GAME_WIDTH = 1280;
-constexpr u32 GAME_HEIGHT = 720;
+constexpr u32 GAME_WIDTH = 640;
+constexpr u32 GAME_HEIGHT = 360;
 
 constexpr u32 WINDOW_WIDTH = 1920;
 constexpr u32 WINDOW_HEIGHT = 1080;

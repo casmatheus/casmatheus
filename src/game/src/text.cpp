@@ -3,6 +3,12 @@
 #include "game/ui.h"
 #include "debug/log.h"
 
+struct TextVertex {
+  f32 pos[2];
+  f32 uv[2];
+  f32 color[4];
+};
+
 struct TextBatchState {
   PipelineID pipeline;
   BufferID vbo;
@@ -15,7 +21,7 @@ struct TextBatchState {
   TextureID currentTexture;
   SamplerID sampler;
 
-  Vec<UIVertex> vertices;
+  Vec<TextVertex> vertices;
   Vec<u16> indices;
 
   u32 vboOffsetBytes; 
@@ -80,63 +86,13 @@ const char* TEXT_FRAG_SHADER = R"(
     return max(min(r, g), min(max(r, g), b));
   }
 
-	@fragment
-  fn main(@location(0) uv: vec2<f32>, @location(1) color: vec4<f32>) -> @location(0) vec4<f32> {
-    let msd = textureSample(myTexture, mySampler, uv).rgb;
-    
-    // 1. Calculate Signed Distance in SDF units (-0.5 to 0.5)
-    let sd = median(msd.r, msd.g, msd.b) - 0.5;
-
-    // 2. Convert to Screen-Space Distance (in Pixels)
-    // This allows us to define outline width in pixels, which is consistent.
-    let texSize = vec2<f32>(textureDimensions(myTexture));
-    let dx = fwidth(uv.x) * texSize.x;
-    let dy = fwidth(uv.y) * texSize.y;
-    let toScreenRatio = length(vec2<f32>(dx, dy));
-    
-    // "distPx" is the distance from the edge in pixels. 
-    // > 0 is inside text, < 0 is outside.
-    let distPx = (sd * u.pxRange) / toScreenRatio;
-
-    // --- CONFIG ---
-    let outlineWidthPx = 2.0;               // Outline thickness in pixels
-    let outlineColor = vec4<f32>(0.0, 0.0, 0.0, 1.0); // Black outline
-    // --------------
-
-    // 3. Compute Alpha for the Fill (The Text itself)
-    // Smooth transition across pixel 0 (-0.5 to 0.5)
-    let fillAlpha = clamp(distPx + 0.5, 0.0, 1.0);
-    
-    // 4. Compute Alpha for the Stroke (The Outline)
-    // It starts 'outlineWidthPx' pixels further out
-    let borderAlpha = clamp(distPx + 0.5 + outlineWidthPx, 0.0, 1.0);
-
-    // 5. Composite
-    // We want the Fill Color where the text is, and Outline Color where the border is (but text isn't).
-    
-    // Start with the Outline
-    var finalColor = outlineColor.rgb;
-    
-    // Blend the Text Color on top of the Outline
-    finalColor = mix(finalColor, color.rgb, fillAlpha);
-    
-    // The overall opacity is determined by the wider shape (the border)
-    // Multiply by the vertex alpha (color.a) to support fade-outs
-    let finalAlpha = borderAlpha * color.a;
-
-    if (finalAlpha < 0.001) { discard; }
-
-    return vec4<f32>(finalColor, finalAlpha);
-  }
-)";
-
-/*
   @fragment
   fn main(@location(0) uv: vec2<f32>, @location(1) color: vec4<f32>) -> @location(0) vec4<f32> {
-    let msd = textureSample(myTexture, mySampler, uv).rgb;
-
-    // Calculate Signed Distance (median - 0.5)
+		let tex = textureSample(myTexture, mySampler, uv);
+    let msd = tex.rgb;
+    
     let sd = median(msd.r, msd.g, msd.b) - 0.5;
+		if (tex.a < 0.1) { discard; }
 
 		let texSize = vec2<f32>(textureDimensions(myTexture));
     let dx = fwidth(uv.x) * texSize.x;
@@ -147,17 +103,41 @@ const char* TEXT_FRAG_SHADER = R"(
     
     // Compute Opacity (0.0 to 1.0)
     let opacity = clamp(screenDist + 0.5, 0.0, 1.0);
-    
-    if (opacity < 0.001) { discard; }
 
-    return vec4<f32>(color.rgb, color.a * opacity);
+		let finalAlpha = opacity * color.a;
+
+		if (finalAlpha < 0.001) { discard; }
+
+    return vec4<f32>(color.rgb, finalAlpha);
   }
 )";
-*/
+
+static u32 DecodeUTF8(const char*& p) {
+  u32 c = (unsigned char)*p++;
+  if (c < 0x80) { // ASCII (1 byte)
+		return c; 
+	}
+  if ((c & 0xE0) == 0xC0) { // 2 bytes
+    u32 c2 = (unsigned char)*p++;
+    return ((c & 0x1F) << 6) | (c2 & 0x3F);
+  }
+  if ((c & 0xF0) == 0xE0) { // 3 bytes
+    u32 c2 = (unsigned char)*p++;
+    u32 c3 = (unsigned char)*p++;
+    return ((c & 0x0F) << 12) | ((c2 & 0x3F) << 6) | (c3 & 0x3F);
+  }
+  if ((c & 0xF8) == 0xF0) { // 4 bytes
+    u32 c2 = (unsigned char)*p++;
+    u32 c3 = (unsigned char)*p++;
+    u32 c4 = (unsigned char)*p++;
+    return ((c & 0x07) << 18) | ((c2 & 0x3F) << 12) | ((c3 & 0x3F) << 6) | (c4 & 0x3F);
+  }
+  return c; 
+}
 
 void TextRenderer::Init() {
   s_Text.uniformBuffer = Renderer::CreateBuffer(nullptr, sizeof(TextBatchState::Uniforms), BufferType::Uniform);
-  s_Text.vbo = Renderer::CreateBuffer(nullptr, sizeof(UIVertex) * 2048, BufferType::Vertex); // ~500 chars per batch
+  s_Text.vbo = Renderer::CreateBuffer(nullptr, sizeof(TextVertex) * 2048, BufferType::Vertex); // ~500 chars per batch
   s_Text.ibo = Renderer::CreateBuffer(nullptr, sizeof(u16) * 6 * 2048, BufferType::Index);
 
   // Linear filtering for SDFs
@@ -172,11 +152,11 @@ void TextRenderer::Init() {
   pCfg.depthWrite = false;
 	pCfg.cull = CullMode::None;
 
-  pCfg.vertexLayout.stride = sizeof(UIVertex);
+  pCfg.vertexLayout.stride = sizeof(TextVertex);
   pCfg.vertexLayout.attributeCount = 3;
-  pCfg.vertexLayout.attributes[0] = {0, VertexFormat::Float32x2, offsetof(UIVertex, pos)};
-  pCfg.vertexLayout.attributes[1] = {1, VertexFormat::Float32x2, offsetof(UIVertex, uv)};
-  pCfg.vertexLayout.attributes[2] = {2, VertexFormat::Float32x4, offsetof(UIVertex, color)};
+  pCfg.vertexLayout.attributes[0] = {0, VertexFormat::Float32x2, offsetof(TextVertex, pos)};
+  pCfg.vertexLayout.attributes[1] = {1, VertexFormat::Float32x2, offsetof(TextVertex, uv)};
+  pCfg.vertexLayout.attributes[2] = {2, VertexFormat::Float32x4, offsetof(TextVertex, color)};
 
   s_Text.pipeline = Renderer::CreatePipeline(pCfg);
 
@@ -203,7 +183,7 @@ void TextRenderer::BeginFrame(u32 width, u32 height) {
 static void FlushTextBatch() {
   if (s_Text.indices.empty()) return;
 
-  u32 vSize = (u32)(s_Text.vertices.size * sizeof(UIVertex));
+  u32 vSize = (u32)(s_Text.vertices.size * sizeof(TextVertex));
   u32 iSize = (u32)(s_Text.indices.size * sizeof(u16));
   Renderer::UpdateBuffer(s_Text.vbo, s_Text.vertices.data, vSize, s_Text.vboOffsetBytes);
   Renderer::UpdateBuffer(s_Text.ibo, s_Text.indices.data, iSize, s_Text.iboOffsetBytes);
@@ -217,7 +197,7 @@ static void FlushTextBatch() {
     Renderer::BindGroup(1, s_Text.fontBindGroup);
   }
 
-  i32 vertexBase = (i32)(s_Text.vboOffsetBytes / sizeof(UIVertex));
+  i32 vertexBase = (i32)(s_Text.vboOffsetBytes / sizeof(TextVertex));
   Renderer::DrawIndexed((u32)s_Text.indices.size, 1, s_Text.indexOffsetCount, vertexBase);
 
   s_Text.vboOffsetBytes += vSize;
@@ -260,8 +240,7 @@ void TextRenderer::DrawText(const Font* font, const char* text, f32 x, f32 y, f3
   // Iterate UTF-8, Assumes ASCII
   const char* p = text;
   while (*p) {
-    u32 unicode = (u32)*p;
-    p++;
+		u32 unicode = DecodeUTF8(p);
 
     if (unicode == '\n') {
       cursorX = x;
@@ -291,10 +270,10 @@ void TextRenderer::DrawText(const Font* font, const char* text, f32 x, f32 y, f3
     f32 vT = glyph->atlasTop / texH;
 
 		f32 off = fontSize * 0.06f; 
-    f32 sR = color[0] * 0.25f;
-    f32 sG = color[1] * 0.25f;
-    f32 sB = color[2] * 0.25f;
-    f32 sA = color[3];
+    f32 sR = color[0] * 0.1f;
+    f32 sG = color[1] * 0.1f;
+    f32 sB = color[2] * 0.1f;
+    f32 sA = color[3] * 0.5f;;
 
 		if (s_Text.vertices.size + 8 > 2048) {
       FlushTextBatch();
@@ -338,11 +317,9 @@ f32 TextRenderer::MeasureText(const Font* font, const char* text, f32 fontSize) 
 
   f32 width = 0.0f;
   
-  // Iterate UTF-8, Assumes ASCII
   const char* p = text;
   while (*p) {
-    u32 unicode = (u32)*p;
-    p++;
+		u32 unicode = DecodeUTF8(p);
 
     if (unicode == '\n') {
       continue;

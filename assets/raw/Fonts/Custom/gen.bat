@@ -1,0 +1,12 @@
+msdf-atlas-gen.exe ^
+	-font "Custom.ttf" ^
+	-charset "charset.txt" ^
+	-type mtsdf ^
+	-size 32 ^
+	-pxrange 2 ^
+	-yorigin top ^
+	-potr ^
+	-pxalign on ^
+	-format png ^
+	-imageout atlas.png ^
+	-json atlas.json

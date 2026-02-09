@@ -62,11 +62,11 @@ Font* Font::Load(const char* fontName) {
   }
 
   char texUrl[128];
-  snprintf(texUrl, 128, "Fonts/%s/atlas.png", fontName);
+  snprintf(texUrl, 128, "/Assets/Fonts/%s/atlas.png", fontName);
   font->texture = CreateTextureFromURL(texUrl);
 
   char binUrl[128];
-  snprintf(binUrl, 128, "Fonts/%s/metrics.bin", fontName);
+  snprintf(binUrl, 128, "/Assets/Fonts/%s/metrics.bin", fontName);
 	fetchFile(binUrl, onFontLoaded, font);
 
 	return font;

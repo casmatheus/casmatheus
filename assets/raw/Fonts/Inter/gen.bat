@@ -8,5 +8,5 @@ msdf-atlas-gen.exe ^
   -potr ^
   -pxalign on ^
   -format png ^
-  -imageout inter_atlas.png ^
-  -json inter_atlas.json
+  -imageout atlas.png ^
+  -json atlas.json

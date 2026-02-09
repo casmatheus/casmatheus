@@ -1,25 +1,29 @@
 #pragma once
 #include "core/primitive.h"
 #include "os/input.h"
-#include "gpu/renderer.h"
+#include "game/font.h"
 
-struct UIVertex {
-  f32 pos[2];   // x, y
-  f32 uv[2];    // u, v
-  f32 color[4]; // r, g, b, a
+#define ICON_GEAR "\uE000"
+#define ICON_JOYSTICK "\uE001"
+#define ICON_EXIT "\uE002"
+
+struct UIStyle {
+  f32 background[4];
+  f32 border[4];
+  f32 text[4];
 };
 
-namespace UIRenderer {
-  void Init();
-  void Shutdown();
-  
-  void BeginFrame(u32 width, u32 height);
-	void Flush();
+struct UITheme {
+	f32 cornerRadius;
+  f32 borderSize;
 
-	void PushQuad(f32 x, f32 y, f32 w, f32 h, f32 colorTop[4], f32 colorBottom[4], BindGroupID bindGroup = INVALID_ID);
-  
-  void EndFrame();
-}
+  f32 shadowSize;
+  f32 shadowColor[4];
+
+	UIStyle colIdle;
+  UIStyle colHover;
+  UIStyle colPress;
+};
 
 namespace UI {
 
@@ -35,11 +39,12 @@ namespace UI {
   constexpr ActionID ACTION_LEFT    = 254; 
   constexpr ActionID ACTION_RIGHT   = 255;
 
-	void Init(PlayerID uiPlayerIndex);
+	void Init(PlayerID playerIdx, const UITheme& theme, Font* font);
 	void Begin(f32 deltaTime, u32 windowWidth, u32 windowHeight);
   void End();
 
-  bool Button(const char* label, f32 x, f32 y, f32 w, f32 h);
+	void DrawRect(f32 x, f32 y, f32 w, f32 h, const f32 color[4], const f32 borderColor[4] = nullptr, f32 radius = 0.0f, f32 border = 0.0f);
+	bool Button(const char* label, f32 x, f32 y, f32 w, f32 h, const UITheme* overrideTheme = nullptr);
 
   struct State {
 		PlayerID playerIdx;
@@ -51,7 +56,8 @@ namespace UI {
 
     f32 mouseX;
     f32 mouseY;
-		bool interactPressed;
+		bool interactReleased;
+		bool interactDown;
 		bool anyHot;
   };
 }

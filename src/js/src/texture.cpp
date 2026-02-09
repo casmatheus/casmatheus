@@ -4,7 +4,6 @@
 #include <emscripten.h>
 #include <stdlib.h>
 
-/*
 extern "C" {
     EMSCRIPTEN_KEEPALIVE
     void Renderer_UpdateTexture(TextureID id, void* data, u32 w, u32 h, u8 c) {
@@ -12,51 +11,47 @@ extern "C" {
     }
 }
 
-
 EM_JS(void, LoadTextureJS, (u32 textureID, const char* url), {
-  var src = UTF8ToString(url);
+  (async () => {
+    const src = UTF8ToString(url);
 
-  fetch(src).then(function(response) {
-    if (!response.ok) throw new Error("Fetch failed " + response.status);
-    return response.blob();
-  }).then(function(blob) {
-    
-    return createImageBitmap(blob, {
-      premultiplyAlpha: 'none',
-      colorSpaceConversion: 'none',
-      resizeQuality: 'pixelated'
-    });
-    
-  }).then(function(bitmap) {
-      
-    var w = bitmap.width;
-    var h = bitmap.height;
-    var canvas = new OffscreenCanvas(w, h);
-    var ctx = canvas.getContext('2d', {
-      willReadFrequently: true,
-      alpha: true
-    });
+    try {
+      const response = await fetch(src);
+      if (!response.ok) throw new Error(`Fetch failed: ${response.status}`);
 
-    ctx.drawImage(bitmap, 0, 0);
-    
-    var imageData = ctx.getImageData(0, 0, w, h);
-    var pixelData = imageData.data;
+      const contentType = response.headers.get("Content-Type");
+      const decoder = new ImageDecoder({
+        data: response.body,
+        type: contentType,
+        premultiplyAlpha: 'none',
+        colorSpaceConversion: 'none'
+      });
 
-    var byteCount = pixelData.length;
-    var ptr = _malloc(byteCount);
+      const result = await decoder.decode();
+      decoder.close();
 
-    Module.HEAPU8.set(pixelData, ptr);
+      const frame = result.image;
+      const w = frame.displayWidth;
+      const h = frame.displayHeight;
 
-    Module['_Renderer_UpdateTexture'](textureID, ptr, w, h, 4);
+      const options = { format: 'RGBA' };
+      const byteSize = frame.allocationSize(options);
+      const ptr = _malloc(byteSize);
 
-    _free(ptr);
-    bitmap.close();
+      const destBuffer = new Uint8Array(Module.HEAPU8.buffer, ptr, byteSize);
 
-  }).catch(function(err) {
-    console.error("[JS] Failed to load texture: " + src, err);
-  });
+      await frame.copyTo(destBuffer, options);
+
+      Module['_Renderer_UpdateTexture'](textureID, ptr, w, h, 4);
+
+      _free(ptr);
+      frame.close();
+
+    } catch (err) {
+      console.error(`[JS] Failed to load texture: ${src}`, err);
+    }
+  })();
 });
-	*/
 
 TextureID CreateTextureFromURL(const char* url) {
   TextureID id = Renderer::DefaultTexture();
