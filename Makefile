@@ -18,6 +18,7 @@ ASSETS_DEST := $(OUTPUT_ROOT)/Assets
 WARNINGS := -Wno-gnu-zero-variadic-macro-arguments \
             -Wno-language-extension-token -Wno-nested-anon-types \
 						-Wno-dollar-in-identifier-extension \
+						-Wno-c99-extensions \
             -Wall -Wextra -pedantic
 
 INCLUDES := -I. -Isrc -Ilibs -Ilibs/glm -Ilibs/stb
@@ -27,18 +28,16 @@ EXE_NAME  := $(BIN_DIR)/index.html
 CXX       := emcc 
 
 CXXFLAGS += --use-port=emdawnwebgpu
-LDFLAGS  := --shell-file shell.html \
-            -s WASM=1 \
+LDFLAGS  := -s WASM=1 \
           	-s ALLOW_MEMORY_GROWTH=1 \
           	-s NO_EXIT_RUNTIME=1 \
 						--use-port=emdawnwebgpu \
 						-lwebsocket.js \
 						-s FETCH=1 \
-						-s INITIAL_MEMORY=2097152 \
+						-s EXPORT_NAME="'Engine'" \
 						-s STACK_SIZE=262144 \
 						-s MALLOC=emmalloc \
-						-s EXPORTED_FUNCTIONS="['_main']" \
-						-s EXPORTED_RUNTIME_METHODS="['UTF8ToString', 'HEAPU8', 'HEAP32']"
+						-s EXPORTED_RUNTIME_METHODS="['UTF8ToString', 'HEAPU8', 'HEAP32', 'noExitRuntime']"
 
 ifeq ($(MODE), debug)
   CXXFLAGS += -g3 -DDEBUG
@@ -57,23 +56,27 @@ GAME_SRCS := $(shell find src -maxdepth 1 -name "*.cpp")
 GAMES := $(patsubst src/%.cpp,%,$(GAME_SRCS))
 GAME_TARGETS := $(foreach g,$(GAMES),$(GAMES_DIR)/$g/index.html)
 
-ASSET_SRCS := $(shell if [ -d "$(ASSETS_SRC_DIR)" ]; then find $(ASSETS_SRC_DIR) -type f; fi)
-ASSET_DESTS := $(patsubst $(ASSETS_SRC_DIR)/%,$(ASSETS_DEST_DIR)/%,$(ASSET_SRCS))
+ASSET_SRCS := $(shell if [ -d "$(ASSETS_SRC)" ]; then find $(ASSETS_SRC) -type f; fi)
+ASSET_DESTS := $(patsubst $(ASSETS_SRC)/%,$(ASSETS_DEST)/%,$(ASSET_SRCS))
 
 .PHONY: all clean run assets
 
 all: $(GAME_TARGETS) assets
 
 assets: $(ASSET_DESTS)
-$(ASSETS_DEST_DIR)/%: $(ASSETS_SRC_DIR)/%
+
+$(ASSETS_DEST)/%: $(ASSETS_SRC)/%
 	@echo [COPY] $<
 	@mkdir -p $(@D)
 	@cp $< $@
 
-$(GAMES_DIR)/%/index.html: src/%.cpp $(ENGINE_OBJS) $(SHELL_FILE)
+$(GAMES_DIR)/hands/index.html: LDFLAGS += -s EXPORTED_FUNCTIONS="['_main', '_GetHandLandmarksPointer', '_SetHandActive']" -s INITIAL_MEMORY=33554432
+$(GAMES_DIR)/pong/index.html: LDFLAGS += -s EXPORTED_FUNCTIONS="['_main', '_malloc', '_free']" -s INITIAL_MEMORY=2097152
+
+$(GAMES_DIR)/%/index.html: src/%.cpp src/%.html $(ENGINE_OBJS) $(SHELL_FILE)
 	@echo [LINK] $* "($(MODE))"
 	@mkdir -p $(@D)
-	@$(CXX) $(CXXFLAGS) $< $(ENGINE_OBJS) -o $@ $(LDFLAGS)
+	@$(CXX) $(CXXFLAGS) $< $(ENGINE_OBJS) -o $@ --shell-file src/$*.html $(LDFLAGS)
 
 $(OBJ_DIR)/%.o: %.cpp
 	@mkdir -p $(@D)

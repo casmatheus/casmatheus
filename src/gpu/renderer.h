@@ -9,12 +9,6 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 
-constexpr u32 GAME_WIDTH = 640;
-constexpr u32 GAME_HEIGHT = 360;
-
-constexpr u32 WINDOW_WIDTH = 1920;
-constexpr u32 WINDOW_HEIGHT = 1080;
-
 constexpr u32 MAX_BINDINGS = 8;
 
 using BufferID    = u32;
@@ -93,7 +87,7 @@ struct RendererConfig {
 
 	static RendererConfig Default(Window& win) {
     return { &win, 
-						 GAME_WIDTH, GAME_HEIGHT,
+						 win.width, win.height,
              PresentMode::FIFO, 
              AntiAliasing::None, 
              {0.1f, 0.1f, 0.1f, 1.0f} 

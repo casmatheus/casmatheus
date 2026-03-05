@@ -3,6 +3,11 @@
 #include "core/primitive.h"
 #include "gpu/renderer.h"
 
+#define ICON_GEAR 		"\uE000"
+#define ICON_JOYSTICK "\uE001"
+#define ICON_EXIT 		"\uE002"
+#define ICON_USER2    "\uE003"
+
 using FontID = u32;
 
 #pragma pack(push, 1)

@@ -146,6 +146,9 @@ struct Input {
   // Clear all bindings for a player
   static void ClearBindings(PlayerID player);
 
+	// Returns true if given gamepad is connected
+	static bool IsGamepadConnected(int index);
+
   // Returns true if the action was pressed THIS frame
   static bool IsJustPressed(PlayerID player, ActionID action);
 

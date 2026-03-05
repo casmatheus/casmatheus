@@ -2,8 +2,9 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <title>WebGPU</title>
+  <title>Pong</title>
 	<link rel="icon" href="data:;base64,=">
+	<script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
   <style>
     body { 
       margin: 0; 
@@ -29,7 +30,7 @@
 <body>
 	<canvas class="emscripten" id="canvas" oncontextmenu="event.preventDefault()"></canvas>
   <script type='text/javascript'>
-    var Module = { 
+    var Engine = { 
 		  canvas: (function() {
       	return document.getElementById('canvas');
       })(),
@@ -76,14 +77,59 @@
 
 		window.addEventListener('keydown', function(e) {
     	var keyId = keyMap[e.code] || 0; // 0 = None
-    	if (keyId > 0) Module['_JSOnKeyDown'](keyId);
+    	if (keyId > 0) Engine['_JSOnKeyDown'](keyId);
 		});
 
 		window.addEventListener('keyup', function(e) {
     	var keyId = keyMap[e.code] || 0;
-    	if (keyId > 0) Module['_JSOnKeyUp'](keyId);
+    	if (keyId > 0) Engine['_JSOnKeyUp'](keyId);
 		});
 
+	  var Network = {
+      peer: null,
+      connection: null,
+
+      initHost: function(hostId) {
+        this.peer = new Peer(hostId);
+        this.peer.on('connection', (conn) => {
+          this.setupConnection(conn);
+          console.log("Client connected to us!");
+        });
+      },
+
+      initClient: function(hostId) {
+        this.peer = new Peer();
+        this.peer.on('open', () => {
+          const conn = this.peer.connect(hostId, { reliable: false });
+          this.setupConnection(conn);
+          console.log("Connected to host!");
+        });
+      },
+
+      setupConnection: function(conn) {
+        this.connection = conn;
+        this.connection.serialization = 'none';
+
+        this.connection.on('data', (data) => {
+          const view = new Uint8Array(data);
+          const size = view.length;
+          
+          const ptr = Engine._malloc(size);
+
+          Engine.HEAPU8.set(view, ptr);
+          Engine._OnNetworkPacket(ptr, size);
+
+          Engine._free(ptr);
+        });
+      },
+
+      sendPacket: function(ptr, size) {
+        if (this.connection && this.connection.open) {
+          const dataView = new Uint8Array(Engine.HEAPU8.buffer, ptr, size);
+          this.connection.send(dataView);
+        }
+      }
+	};  
   </script>
     {{{ SCRIPT }}}
 </body>

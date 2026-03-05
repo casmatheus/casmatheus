@@ -9,62 +9,46 @@
 </head>
 <body>
 
-    <nav>
-        <div class="nav-container">
-            <button class="tab-btn active" onclick="openTab('home')">Home</button>
-            <button class="tab-btn" onclick="openTab('writings')">Writings</button>
-            <button class="tab-btn" onclick="openTab('games')">Games</button>
-            <button class="tab-btn" onclick="openTab('books')">Books</button>
-            <button class="tab-btn" onclick="openTab('movies')">Movies</button>
-        </div>
-    </nav>
+<canvas id="constellation-canvas"></canvas> 
 
-    <div id="home" class="tab-content active">
-        <div class="profile-section">
-            <img src="assets/profile.jpg" alt="Me" class="profile-pic">
-            <div class="bio">
-                <h1>Hello, I'm Matheus</h1>
-                <p>I am a graphics engineer and game developer specializing in C++, WebGPU, and WebAssembly.</p>
-            </div>
-        </div>
-        <div class="showcase">
-            <h2>Recent Updates</h2>
-            <p>Just released my custom C++ engine running in the browser.</p>
-        </div>
+<nav>
+  <div class="nav-container">
+    <button class="tab-btn active" onclick="openTab('home')" data-i18n="nav.home">Home</button>
+    <button class="tab-btn" onclick="openTab('games')" data-i18n="nav.games">Games</button>
+    <button class="tab-btn" onclick="openTab('books')" data-i18n="nav.books">Books</button>
+    <button class="tab-btn" onclick="openTab('movies')" data-i18n="nav.movies">Movies</button>
+  </div>
+</nav>
+<div id="home" class="tab-content active">
+  <div class="profile-section">
+    <img src="assets/profile.jpg" alt="Me" class="profile-pic">
+    <div class="bio">
+      <h1 data-i18n="home.hello">Hello, I'm Matheus</h1>
+      <p data-i18n="home.bio">I am an engineer</p>
     </div>
+  </div>
+</div>
 
-    <div id="writings" class="tab-content">
-        <div class="grid-container">
-            <a href="articles/webgpu-engine.html" target="_blank" class="card writing-card">
-                <div class="thumb" style="background-image: url('assets/thumbs/code.jpg');"></div>
-                <div class="card-info">
-                    <h3>Building a Game Engine from Scratch</h3>
-                    <p>A deep dive into memory management in WASM.</p>
-                </div>
-            </a>
-        </div>
-    </div>
+<div id="games" class="tab-content">
+  <div id="game-grid" class="grid-container">
+    <p data-i18n="common.loading">Loading games...</p>
+  </div>
+</div>
 
-    <div id="games" class="tab-content">
-        <div id="game-grid" class="grid-container">
-            <p>Loading games...</p>
-        </div>
-    </div>
+<div id="books" class="tab-content">
+  <h2 data-i18n="books.title">Reading List</h2>
+  <div id="book-grid" class="grid-container compact">
+    <p data-i18n="common.loading">Loading books...</p>
+  </div>
+</div>
 
-    <div id="books" class="tab-content">
-        <h2>Reading List</h2>
-        <div id="book-grid" class="grid-container compact">
-            <p>Loading books...</p>
-        </div>
-    </div>
+<div id="movies" class="tab-content">
+  <h2 data-i18n="movies.title">Watch List</h2>
+  <div id="movie-grid" class="grid-container compact">
+    <p data-i18n="common.loading">Loading movies...</p>
+  </div>
+</div>
 
-    <div id="movies" class="tab-content">
-        <h2>Watch List</h2>
-        <div id="movie-grid" class="grid-container compact">
-            <p>Loading movies...</p>
-        </div>
-    </div>
-
-    <script src="app.js"></script>
+<script src="app.js"></script>
 </body>
 </html>

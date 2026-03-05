@@ -16,9 +16,11 @@ struct Window {
   bool shouldClose;
   bool resized;
 	
-	static WindowRes Create(u32 width, u32 height, const char* title);
+	static WindowRes Create(const char* title);
 
 	static void Size(u32* width, u32* height);
+
+	static void GetFramebufferSize(u32* width, u32* height);
 	
 	void destroy();
 };

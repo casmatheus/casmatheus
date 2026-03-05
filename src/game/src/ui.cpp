@@ -40,17 +40,26 @@ void UI::Init(PlayerID playerIdx, const UITheme& theme, Font* font) {
   
   Input::MapAction(playerIdx, ACTION_DOWN, InputBinding::FromKey(Key::ArrowDown).bypass());
   Input::MapAction(playerIdx, ACTION_DOWN, InputBinding::FromButton(GamepadButton::DPadDown).bypass());
+
+	Input::MapAction(playerIdx, ACTION_LEFT, InputBinding::FromKey(Key::ArrowLeft).bypass());
+	Input::MapAction(playerIdx, ACTION_LEFT, InputBinding::FromButton(GamepadButton::DPadLeft).bypass());
+
+	Input::MapAction(playerIdx, ACTION_RIGHT, InputBinding::FromKey(Key::ArrowRight).bypass());
+	Input::MapAction(playerIdx, ACTION_RIGHT, InputBinding::FromButton(GamepadButton::DPadRight).bypass());
 }
 
-void UI::Begin(f32 deltaTime, u32 width, u32 height) {
-	PERF_SCOPE("[UI] Frame");
+void UI::Begin(f32 deltaTime, u32 winWidth, u32 winHeight, f32 vWidth, f32 vHeight) {
+	PERF_SCOPE("[UI] Begin");
 
   (void)deltaTime;
 	s_State.widgetCounter = 0;
 	s_State.anyHot = false;
 
-	s_State.mouseX = Input::GetMouseX();
-  s_State.mouseY = Input::GetMouseY();
+	f32 scaleX = vWidth / (f32)winWidth;
+  f32 scaleY = vHeight / (f32)winHeight;
+
+	s_State.mouseX = Input::GetMouseX() * scaleX;
+  s_State.mouseY = Input::GetMouseY() * scaleY;
 
 	bool mouseMoved = Abs(Input::GetMouseDeltaX()) > 0.1f || Abs(Input::GetMouseDeltaY()) > 0.1f;
   if (mouseMoved) {
@@ -84,9 +93,9 @@ void UI::Begin(f32 deltaTime, u32 width, u32 height) {
 	s_State.interactReleased = Input::IsJustReleased(s_State.playerIdx, ACTION_ACCEPT);
 	s_State.interactDown	= Input::IsDown(s_State.playerIdx, ACTION_ACCEPT);
   
-	glm::mat4 uiProj = glm::ortho(0.0f, (f32)width, (f32)height, 0.0f, -1.0f, 1.0f);
+	glm::mat4 uiProj = glm::ortho(0.0f, vWidth, vHeight, 0.0f, -1.0f, 1.0f);
   ShapeRenderer::BeginFrame(&uiProj[0][0]);
-	TextRenderer::BeginFrame(width, height);
+	TextRenderer::BeginFrame(vWidth, vHeight);
 }
 
 void UI::End() {
@@ -153,7 +162,7 @@ bool UI::Button(const char* label, f32 x, f32 y, f32 w, f32 h, const UITheme* ov
 	ShapeRenderer::DrawRect(x, y + yOff, w, h, style->background, style->border, theme.cornerRadius, theme.borderSize);
 
 	if (label && s_Font && s_Font->loaded) {
-    f32 fontSize = 32.0f * scale;
+		f32 fontSize = h * 0.55f;
     f32 textW = TextRenderer::MeasureText(s_Font, label, fontSize);
     f32 textX = x + (w - textW) * 0.5f;
     f32 textY = (y + yOff) + (h * 0.5f) + (fontSize * 0.3f);
@@ -162,4 +171,117 @@ bool UI::Button(const char* label, f32 x, f32 y, f32 w, f32 h, const UITheme* ov
   }
 
 	return pressed;
+}
+
+bool UI::Slider(const char* label, f32* value, f32 min, f32 max, f32 x, f32 y, f32 w, f32 h) {
+  i32 index = s_State.widgetCounter++;
+  bool hot = false;
+
+	f32 textH   = h * 0.35f;
+  f32 sliderH = h * 0.65f;
+  f32 knobW 	= h * 0.25f;
+
+
+  if (s_State.mode == UI::InputMode::Mouse) {
+    if (regionHit(x, y, w, h)) {
+      hot = true;
+      s_State.focusIndex = index;
+    }
+  } else {
+    if (s_State.focusIndex == index) {
+      hot = true;
+    }
+  }
+
+  s_State.anyHot |= hot;
+  bool active = (hot && s_State.interactDown);
+  bool changed = false;
+
+  if (active && s_State.mode == UI::InputMode::Mouse) {
+		f32 trackStart = x + (knobW * 0.5f);
+    f32 trackWidth = w - knobW;
+
+    if (trackWidth < 1.0f) trackWidth = 1.0f;
+
+		f32 mouseT = (s_State.mouseX - trackStart) / trackWidth;
+    f32 newVal = min + (mouseT * (max - min));
+    
+    if (newVal < min) newVal = min;
+    if (newVal > max) newVal = max;
+
+    if (*value != newVal) {
+      *value = newVal;
+      changed = true;
+    }
+  }
+
+  if (hot && s_State.mode == UI::InputMode::Gamepad) {
+    f32 step = (max - min) * 0.01f; // 1% speed
+    if (Input::IsDown(s_State.playerIdx, ACTION_LEFT)) {
+      *value -= step;
+      if (*value < min) *value = min;
+      changed = true;
+    }
+    if (Input::IsDown(s_State.playerIdx, ACTION_RIGHT)) {
+      *value += step;
+      if (*value > max) *value = max;
+      changed = true;
+    }
+  }
+
+  f32 railY   = y + textH + (sliderH * 0.5f);
+  f32 railThickness = sliderH * 0.55f; 
+	f32 railRad   = railThickness * 0.5f;
+	f32 railBorder= 3.0f;
+  
+  f32 knobH = sliderH * 0.9f;
+  f32 knobY = y + textH + (sliderH - knobH) * 0.5f;
+
+  f32 t = (*value - min) / (max - min);
+
+	f32 knobCenterX = x + (knobW * 0.5f) + (t * (w - knobW));
+
+  if (s_Font && s_Font->loaded) {
+    f32 fontSize = textH * 0.85f;
+		f32 textBaseY = y + textH - (fontSize * 0.2f);
+    
+    if (label) {
+      TextRenderer::DrawText(s_Font, label, x, textBaseY, fontSize, s_Theme.colIdle.text);
+    }
+
+    char valBuf[16];
+    int percent = (int)(t * 100.0f);
+    snprintf(valBuf, 16, "%d%%", percent);
+    
+    f32 valW = TextRenderer::MeasureText(s_Font, valBuf, fontSize);
+    TextRenderer::DrawText(s_Font, valBuf, x + w - valW, textBaseY, fontSize, active ? s_Theme.colPress.text : s_Theme.colIdle.text);
+  }
+
+  f32 railBgCol[] = {0.05f, 0.05f, 0.05f, 1.0f};
+	ShapeRenderer::DrawRect(x, railY - (railThickness * 0.5f), w, railThickness, railBgCol, s_Theme.colIdle.border, railRad, railBorder);
+
+	f32 shadowCol[] = {0.0f, 0.0f, 0.0f, 0.3f};
+	ShapeRenderer::DrawRect(x + railBorder, railY - (railThickness * 0.5f) + railBorder, w - (railBorder * 2), (railThickness * 0.4f), shadowCol, nullptr, railRad * 0.5f);
+
+	f32 fillW = knobCenterX - x;
+	if (fillW < railRad) fillW = railRad;
+
+  if (fillW > 0.0f) {
+		const f32* baseCol = s_Theme.colIdle.text;
+    f32 innerThick = railThickness - (railBorder * 2.0f);
+    ShapeRenderer::DrawRect(x + railBorder, railY - (innerThick * 0.5f), fillW - railBorder, innerThick, baseCol, nullptr, innerThick*0.5f);
+
+		f32 highlight[] = {1.0f, 1.0f, 1.0f, 0.2f};
+		ShapeRenderer::DrawRect(x + railBorder, railY - (innerThick * 0.5f), fillW - railBorder, innerThick * 0.4f, highlight, nullptr, innerThick*0.5f);
+  }
+
+	f32 knobX = knobCenterX - (knobW * 0.5f);
+  
+  const UIStyle* style = &s_Theme.colIdle;
+  if (active) style = &s_Theme.colPress;
+  else if (hot) style = &s_Theme.colHover;
+
+	ShapeRenderer::DrawRect(knobX, knobY, knobW, knobH, style->text, style->border, 4.0f, 2.0f);
+
+  return changed;
 }

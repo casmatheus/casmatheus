@@ -1,16 +1,40 @@
 const myGames = [
-  { 
-      title: "Pong", 
-      link: "games/pong/index.html", 
-      tags: ["gamepad", "multiplayer"] 
-  },
+{ 
+  title: "Pong", 
+	link: "games/pong/index.html", 
+	tags: ["gamepad", "multiplayer"] 
+},
+{ 
+  title: "Hands", 
+	link: "games/hands/index.html", 
+	tags: ["webcam"] 
+}
+
 ];
 
 const myMovies = [
+  { title: "Adaptation", rating: 4 },
+  { title: "Katatsumori", rating: 4 },
+  { title: "O Agente Secreto", rating: 5 },
+  { title: "Birdman", rating: 3 },
   { title: "The Shining", rating: 4 },
+  { title: "Marty Supreme", rating: 5 },
+  { title: "The Whale", rating: 3 },
+  { title: "Interview with the Vampire", rating: 5 },
+  { title: "Ainda Estou Aqui", rating: 5 },
+  { title: "The Lobster", rating: 4 },
+  { title: "No Other Choice", rating: 3 },
+  { title: "Bugonia", rating: 5 },
+  { title: "Kinds of Kindness", rating: 2 },
+  { title: "Hamnet", rating: 3 },
+  { title: "Little Miss Sunshine", rating: 5 },
+  { title: "The Lighthouse", rating: 4 },
+  { title: "Jacob's Ladder", rating: 4 },
 ];
 
+
 const myBooks = [
+{ title: "Outras Mentes", author: "Peter Godfrey-Smith", rating: 2 },
 { title: "Torto Arado", author: "Itamar Vieira Junior", rating: 3 },
 { title: "Vidas Secas", author: "Graciliano Ramos", rating: 4 },
 { title: "Véspera", author: "Carla Madeira", rating: 5 },
@@ -48,20 +72,70 @@ const myBooks = [
 { title: "Poemas, Sonetos e Baladas", author: "Vinicius de Moraes", rating: 5 },
 { title: "A Rosa do Povo", author: "Carlos Drummond de Andrade", rating: 5 },
 { title: "L'Étranger", author: "Albert Camus", rating: 5 },
-
 ];
 
 const iconMap = {
   "gamepad": "fa-solid fa-gamepad",
   "multiplayer": "fa-solid fa-user-group",
+  "webcam": "fa-solid fa-camera",
 };
 
 let booksLoaded = false;
 let moviesLoaded = false;
 let gamesLoaded = false;
 
+const translations = {
+  // Português
+  pt: {
+    "nav.home": "Início",
+    "nav.games": "Jogos",
+    "nav.books": "Livros",
+    "nav.movies": "Filmes",
+    "home.hello": "Olá, sou o Matheus",
+    "home.bio": "Sou engenheiro gráfico",
+    "books.title": "Lista de Leitura",
+    "movies.title": "Lista de Filmes",
+    "common.loading": "Carregando..."
+  },
+  // Français
+  fr: {
+    "nav.home": "Accueil",
+    "nav.games": "Jeux",
+    "nav.books": "Livres",
+    "nav.movies": "Films",
+    "home.hello": "Bonjour, je suis Matheus",
+    "home.bio": "Je suis ingénieur",
+    "books.title": "Liste de Lecture",
+    "movies.title": "Liste de Visionnage",
+    "common.loading": "Chargement..."
+  }
+};
+
+function applyLanguage() {
+  const userLang = navigator.language || navigator.userLanguage; 
+  const langCode = userLang.split('-')[0];
+
+  if (!translations[langCode]) {
+    console.log(`Language ${langCode} not supported, using English default.`);
+    return;
+  }
+
+  console.log(`Applying translation for: ${langCode}`);
+  
+  const dict = translations[langCode];
+  document.querySelectorAll('[data-i18n]').forEach(el => {
+    const key = el.getAttribute('data-i18n');
+    if (dict[key]) {
+      el.textContent = dict[key];
+    }
+  });
+}
+
+
 function openTab(tabId) {
 	localStorage.setItem('activeTab', tabId);
+
+	document.body.className = `theme-${tabId}`;
 
   const contents = document.querySelectorAll('.tab-content');
   contents.forEach(content => content.classList.remove('active'));
@@ -190,4 +264,80 @@ function sanitizeFilename(name) {
 document.addEventListener('DOMContentLoaded', () => {
   const savedTab = localStorage.getItem('activeTab') || 'home';
   openTab(savedTab);
+
+	applyLanguage();
 });
+
+const canvas = document.getElementById('constellation-canvas');
+const ctx = canvas.getContext('2d');
+let particles = [];
+
+function resizeCanvas() {
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+  initParticles();
+}
+
+class Particle {
+  constructor() {
+    this.x = Math.random() * canvas.width;
+    this.y = Math.random() * canvas.height;
+    this.vx = (Math.random() - 0.5) * 0.4;
+    this.vy = (Math.random() - 0.5) * 0.4;
+    this.radius = Math.random() * 1.5 + 0.5;
+  }
+
+  update() {
+    this.x += this.vx;
+    this.y += this.vy;
+
+    if (this.x < 0 || this.x > canvas.width) this.vx *= -1;
+    if (this.y < 0 || this.y > canvas.height) this.vy *= -1;
+  }
+
+  draw() {
+    ctx.beginPath();
+    ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(177, 0, 255, 0.8)';
+    ctx.fill();
+  }
+}
+
+function initParticles() {
+  particles = [];
+  let numParticles = Math.floor((canvas.width * canvas.height) / 12000);
+  for (let i = 0; i < numParticles; i++) {
+    particles.push(new Particle());
+  }
+}
+
+function animateConstellation() {
+  if (document.body.classList.contains('theme-home')) {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    for (let i = 0; i < particles.length; i++) {
+      particles[i].update();
+      particles[i].draw();
+
+      for (let j = i + 1; j < particles.length; j++) {
+        let dx = particles[i].x - particles[j].x;
+        let dy = particles[i].y - particles[j].y;
+        let dist = dx * dx + dy * dy;
+
+        if (dist < 15000) {
+          ctx.beginPath();
+          ctx.strokeStyle = `rgba(177, 0, 255, ${1 - dist / 15000})`;
+          ctx.lineWidth = 0.5;
+          ctx.moveTo(particles[i].x, particles[i].y);
+          ctx.lineTo(particles[j].x, particles[j].y);
+          ctx.stroke();
+        }
+      }
+    }
+  }
+  requestAnimationFrame(animateConstellation);
+}
+
+window.addEventListener('resize', resizeCanvas);
+resizeCanvas();
+animateConstellation();

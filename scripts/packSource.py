@@ -2,9 +2,9 @@ import os
 
 sourceFolders   = ["src"]
 outputFilename  = "packedSource.txt"
-validExtensions = [".cpp", ".h"]
+validExtensions = [".cpp", ".h", ".html"]
 filesToInclude  = ["shell.html", "Makefile", ".gitmodules", "scripts/packSource.py", 
-                   "scripts/cookFont.py"]
+                   "scripts/cookFont.py", "website/index.html", "website/app.js", "website/style.css"]
 
 separator = f"{'='*20}\n"
 

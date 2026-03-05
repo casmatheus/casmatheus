@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Hands</title>
+  <link rel="icon" href="data:;base64,=">
+  <style>
+    body { 
+      margin: 0;
+      background-color: #111;
+      overflow: hidden;
+      height: 100vh;
+    }
+
+    canvas.emscripten { 
+      border: 0px none;
+      background-color: black;
+      display: block;
+      outline: none;
+
+      image-rendering: pixelated;
+      image-rendering: crisp-edges;
+
+      position: absolute;
+      top: 0;
+      left: 0;
+    }
+
+		#loading {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      color: #00ff80;
+      font-family: monospace;
+      font-size: 1.5rem;
+      pointer-events: none;
+      transition: opacity 0.5s ease;
+      z-index: 10;
+		}
+
+  </style>
+</head>
+<body>
+	<div id="loading">INITIALIZING NEURAL ENGINE...</div>
+  <canvas class="emscripten" id="canvas" oncontextmenu="event.preventDefault()"></canvas>
+  <video id="webcam" style="display: none;" autoplay playsinline></video>
+
+  <script type='text/javascript'>
+    var Engine = { 
+      canvas: (function() { return document.getElementById('canvas'); })(),
+      print: (function() {
+        return function(text) {
+          if (arguments.length > 1) text = Array.prototype.slice.call(arguments).join(' ');
+          console.log(text);
+        };
+      })(),
+      printErr: (function() {
+        return function(text) {
+          if (arguments.length > 1) text = Array.prototype.slice.call(arguments).join(' ');
+          console.error(text);
+        };
+      })(),
+      postRun: [function() {
+        document.getElementById('canvas').focus();
+				window.dispatchEvent(new Event('EngineReady'));
+      }]
+    };
+
+    var keyMap = {
+      "KeyA": 1, "KeyB": 2, "KeyC": 3, "KeyD": 4, "KeyE": 5,
+      "KeyF": 6, "KeyG": 7, "KeyH": 8, "KeyI": 9, "KeyJ": 10,
+      "KeyK": 11, "KeyL": 12, "KeyM": 13, "KeyN": 14,
+      "KeyO": 15, "KeyP": 16, "KeyQ": 17, "KeyR": 18,
+      "KeyS": 19, "KeyT": 20, "KeyU": 21, "KeyV": 22,
+      "KeyW": 23, "KeyX": 24, "KeyY": 25, "KeyZ": 26,
+      "Digit0": 27, "Digit1": 28, "Digit2": 29, "Digit3": 30,
+      "Digit4": 31, "Digit5": 32, "Digit6": 33, "Digit7": 34,
+      "Digit8": 35, "Digit9": 36,
+      "Numpad0": 27, "Numpad1": 28, "Numpad2": 29, "Numpad3": 30,
+      "Numpad4": 31, "Numpad5": 32, "Numpad6": 33, "Numpad7": 34,
+      "Numpad8": 35, "Numpad9": 36,
+      "Space": 37, "Enter": 38, "Escape": 39, "Backspace": 40,
+      "Tab": 41, "ShiftLeft": 42, "ShiftRight": 42,
+      "ControlLeft": 43, "ControlRight": 43,
+      "AltLeft": 44, "AltRight": 44,
+      "ArrowUp": 45, "ArrowDown": 46,
+      "ArrowLeft": 47, "ArrowRight": 48
+    };
+
+    window.addEventListener('keydown', function(e) {
+      var keyId = keyMap[e.code] || 0; 
+      if (keyId > 0 && Engine['_JSOnKeyDown']) Engine['_JSOnKeyDown'](keyId);
+    });
+
+    window.addEventListener('keyup', function(e) {
+      var keyId = keyMap[e.code] || 0;
+      if (keyId > 0 && Engine['_JSOnKeyUp']) Engine['_JSOnKeyUp'](keyId);
+    });
+  </script>
+
+  <script type="module">
+    const video = document.getElementById("webcam");
+    let handLandmarker = undefined;
+    let webcamRunning = false;
+    let lastVideoTime = -1;
+
+		const EMA_ALPHA = 0.6; // 0.0 to 1.0. Higher = smoother but slightly more lag
+    const MAX_LOST_FRAMES = 5; // How many frames to wait before hiding a lost hand
+
+		let postProcessState = [
+      { active: false, lostFrames: 100, data: new Float32Array(21 * 3) },
+      { active: false, lostFrames: 100, data: new Float32Array(21 * 3) }
+    ];
+
+		window.addEventListener('EngineReady', async () => {
+			window.Module = {};
+      const { HandLandmarker, FilesetResolver } = await import("https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.32/+esm");
+
+      const vision = await FilesetResolver.forVisionTasks(
+        "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.32/wasm"
+      );
+      
+      handLandmarker = await HandLandmarker.createFromOptions(vision, {
+        baseOptions: {
+          modelAssetPath: "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task",
+          delegate: "CPU"
+        },
+        runningMode: "VIDEO",
+        numHands: 2,
+
+				minHandDetectionConfidence: 0.7,
+        minHandPresenceConfidence: 0.7,
+        minTrackingConfidence: 0.4
+      });
+
+			if (webcamRunning) {
+        predictWebcam();
+      }
+    });
+
+    function startWebcam() {
+			const constraints = { 
+        video: { 
+          facingMode: "user",
+					width: { ideal: 640 },
+          height: { ideal: 480 },
+          frameRate: { ideal: 30 }
+        } 
+      }
+
+			navigator.mediaDevices.getUserMedia(constraints).then((stream) => {
+        video.srcObject = stream;
+        video.addEventListener("loadeddata", () => {
+          webcamRunning = true;
+          if (handLandmarker) {
+            if ('requestVideoFrameCallback' in video) {
+              video.requestVideoFrameCallback(predictWebcam);
+            } else {
+              window.requestAnimationFrame(predictWebcam);
+            }
+          }
+        });
+      }).catch((err) => {
+        console.error("[JS] Webcam access denied: ", err);
+      });
+    }
+
+    async function predictWebcam(now, metadata) {
+			if (handLandmarker) {
+        const timestamp = metadata ? metadata.presentationTime : performance.now();
+        
+        const results = handLandmarker.detectForVideo(video, timestamp);
+
+        const loadingScreen = document.getElementById("loading");
+        if (loadingScreen && loadingScreen.style.opacity !== "0") {
+          loadingScreen.style.opacity = "0";
+          setTimeout(() => loadingScreen.remove(), 500);
+        }
+
+        bridgeToCpp(results.landmarks, results.handednesses);
+			}
+
+			if (webcamRunning) {
+        if ('requestVideoFrameCallback' in video) {
+          video.requestVideoFrameCallback(predictWebcam);
+        } else {
+          window.requestAnimationFrame(predictWebcam);
+        }
+      }
+    }
+
+		function bridgeToCpp(trackedHands, handednesses) {
+      if (!Engine._SetHandActive || !Engine._GetHandLandmarksPointer) return;
+
+      let updatedThisFrame = [false, false];
+			let newHands = [];
+
+      if (trackedHands && trackedHands.length > 0) {
+        for (let i = 0; i < Math.min(trackedHands.length, 2); i++) {
+          newHands.push({
+            landmarks: trackedHands[i],
+            category: handednesses[i][0].categoryName,
+            wristX: trackedHands[i][0].x,
+            wristY: 1.0 - trackedHands[i][0].y
+          });
+        }
+      }
+
+      let assignedSlots = [-1, -1];
+
+      for (let slot = 0; slot < 2; slot++) {
+        if (postProcessState[slot].active) {
+          let bestDist = Infinity;
+          let bestHandIdx = -1;
+          
+          for (let h = 0; h < newHands.length; h++) {
+            if (assignedSlots.includes(h)) continue;
+
+            let dx = newHands[h].wristX - postProcessState[slot].lastWristX;
+            let dy = newHands[h].wristY - postProcessState[slot].lastWristY;
+            let dist = dx * dx + dy * dy;
+
+            if (dist < bestDist && dist < 0.1) {
+              bestDist = dist;
+              bestHandIdx = h;
+            }
+          }
+          if (bestHandIdx !== -1) {
+            assignedSlots[bestHandIdx] = slot;
+          }
+        }
+      }
+
+      for (let h = 0; h < newHands.length; h++) {
+        if (!assignedSlots.includes(h)) {
+          let targetSlot = newHands[h].category === "Right" ? 1 : 0;
+          
+          if (assignedSlots.indexOf(targetSlot) !== -1) {
+            targetSlot = targetSlot === 0 ? 1 : 0; 
+          }
+          assignedSlots[h] = targetSlot;
+        }
+      }
+
+      for (let h = 0; h < newHands.length; h++) {
+        let targetSlot = assignedSlots[h];
+        if (targetSlot === -1) continue;
+
+        updatedThisFrame[targetSlot] = true;
+        postProcessState[targetSlot].lostFrames = 0;
+        postProcessState[targetSlot].lastWristX = newHands[h].wristX;
+        postProcessState[targetSlot].lastWristY = newHands[h].wristY;
+
+        for (let j = 0; j < 21; j++) {
+          const rawX = newHands[h].landmarks[j].x;
+          const rawY = 1.0 - newHands[h].landmarks[j].y; 
+          const rawZ = newHands[h].landmarks[j].z;
+
+          if (!postProcessState[targetSlot].active) {
+            postProcessState[targetSlot].data[j * 3 + 0] = rawX;
+            postProcessState[targetSlot].data[j * 3 + 1] = rawY;
+            postProcessState[targetSlot].data[j * 3 + 2] = rawZ;
+          } else {
+            postProcessState[targetSlot].data[j * 3 + 0] = postProcessState[targetSlot].data[j * 3 + 0] * EMA_ALPHA + rawX * (1.0 - EMA_ALPHA);
+            postProcessState[targetSlot].data[j * 3 + 1] = postProcessState[targetSlot].data[j * 3 + 1] * EMA_ALPHA + rawY * (1.0 - EMA_ALPHA);
+            postProcessState[targetSlot].data[j * 3 + 2] = postProcessState[targetSlot].data[j * 3 + 2] * EMA_ALPHA + rawZ * (1.0 - EMA_ALPHA);
+          }
+        }
+        postProcessState[targetSlot].active = true;
+      }
+
+      for (let slot = 0; slot < 2; slot++) {
+        if (!updatedThisFrame[slot]) {
+          postProcessState[slot].lostFrames++;
+          if (postProcessState[slot].lostFrames > MAX_LOST_FRAMES) {
+            postProcessState[slot].active = false;
+          }
+        }
+
+        if (postProcessState[slot].active) {
+          const ptr = Engine._GetHandLandmarksPointer(slot);
+          const heapView = new Float32Array(Engine.HEAPU8.buffer, ptr, 21 * 3);
+          heapView.set(postProcessState[slot].data);
+          Engine._SetHandActive(slot, true);
+        } else {
+          Engine._SetHandActive(slot, false);
+        }
+      }
+    }
+
+    startWebcam();
+  </script>
+  {{{ SCRIPT }}}
+</body>
+</html>

@@ -420,6 +420,14 @@ void Input::ClearBindings(PlayerID player) {
   g_Players[player].bindings.clear();
 }
 
+bool Input::IsGamepadConnected(int index) {
+  EmscriptenGamepadEvent ge;
+  if (emscripten_get_gamepad_status(index, &ge) == EMSCRIPTEN_RESULT_SUCCESS) {
+    return ge.connected;
+  }
+  return false;
+}
+
 bool Input::IsJustPressed(PlayerID player, ActionID action) {
   if (player >= MAX_PLAYERS || action >= MAX_ACTIONS) {
     logError("IsJustPressed: Invalid access Player %u, Action %u", player, action);

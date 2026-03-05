@@ -3,10 +3,6 @@
 #include "os/input.h"
 #include "game/font.h"
 
-#define ICON_GEAR "\uE000"
-#define ICON_JOYSTICK "\uE001"
-#define ICON_EXIT "\uE002"
-
 struct UIStyle {
   f32 background[4];
   f32 border[4];
@@ -40,11 +36,12 @@ namespace UI {
   constexpr ActionID ACTION_RIGHT   = 255;
 
 	void Init(PlayerID playerIdx, const UITheme& theme, Font* font);
-	void Begin(f32 deltaTime, u32 windowWidth, u32 windowHeight);
+	void Begin(f32 deltaTime, u32 winWidth, u32 winHeight, f32 vWidth, f32 vHeight);
   void End();
 
 	void DrawRect(f32 x, f32 y, f32 w, f32 h, const f32 color[4], const f32 borderColor[4] = nullptr, f32 radius = 0.0f, f32 border = 0.0f);
 	bool Button(const char* label, f32 x, f32 y, f32 w, f32 h, const UITheme* overrideTheme = nullptr);
+	bool Slider(const char* label, f32* value, f32 min, f32 max, f32 x, f32 y, f32 w, f32 h);
 
   struct State {
 		PlayerID playerIdx;

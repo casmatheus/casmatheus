@@ -38,11 +38,11 @@ EM_JS(void, LoadTextureJS, (u32 textureID, const char* url), {
       const byteSize = frame.allocationSize(options);
       const ptr = _malloc(byteSize);
 
-      const destBuffer = new Uint8Array(Module.HEAPU8.buffer, ptr, byteSize);
+      const destBuffer = new Uint8Array(Engine.HEAPU8.buffer, ptr, byteSize);
 
       await frame.copyTo(destBuffer, options);
 
-      Module['_Renderer_UpdateTexture'](textureID, ptr, w, h, 4);
+      Engine['_Renderer_UpdateTexture'](textureID, ptr, w, h, 4);
 
       _free(ptr);
       frame.close();
