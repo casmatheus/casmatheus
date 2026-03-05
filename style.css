@@ -1,15 +1,103 @@
 :root {
-  --bg-color: #111;
-  --card-bg: #1a1a1a;
+  --bg-color: #1a0b2e;
+  --bg-image: none;
   --text-color: #eee;
-  --accent: #007bff;
+  --accent: #ffcc00;
+  --border-color: #5a001a;
+	--content-width: 1200px;
+}
+
+body.theme-home {
+  --bg-color: #090314;
+  --accent: #b100ff;
+  --border-color: #2a0a4a;
+
+  background-color: var(--bg-color);
+  background-image: none;
+}
+
+#constellation-canvas {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  z-index: -1;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.6s ease;
+}
+
+body.theme-home #constellation-canvas {
+  opacity: 1;
+}
+
+body.theme-games {
+  --bg-color: #02040a; 
+  --accent: #ffd700;   
+  --border-color: #0f1b3d;
+
+  background-color: var(--bg-color);
+
+  background-image: 
+    /* Vignette */
+    radial-gradient(circle at center, transparent 40%, #010103 95%),
+
+    /* Grid */
+    linear-gradient(rgba(255, 215, 0, 0.1) 4px, transparent 4px),
+    linear-gradient(90deg, rgba(255, 215, 0, 0.1) 4px, transparent 4px);
+  
+  background-size: 100% 100%, 8vw 8vw, 8vw 8vw;
+  
+  background-position: center center;
+  background-attachment: fixed;
+}
+
+body.theme-books {
+  --bg-color: #030d10;
+  --accent: #00d4ff;
+  --border-color: #0b3d45;
+  
+  background-color: var(--bg-color);
+
+  background-image: radial-gradient(
+    80% 75% ellipse at center, 
+    rgba(12, 100, 110, 0.9) 0%,   
+    rgba(8, 60, 70, 0.5) 45%,
+    transparent 75%
+  );
+
+  background-attachment: fixed;
+  background-size: cover;
+}
+
+body.theme-movies {
+  --bg-color: #110508;
+  --accent: #fa4354;
+  --border-color: #400717;
+	background-color: var(--bg-color);
+
+	background-image: radial-gradient(
+    80% 75% ellipse at center, 
+    rgba(106, 4, 15, 0.9) 0%,   
+    rgba(106, 4, 15, 0.5) 45%,
+    transparent 75%
+  );
+
+	background-attachment: fixed;
+	background-size: cover;
 }
 
 body {
   margin: 0;
   font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
   background-color: var(--bg-color);
+  background-image: var(--bg-image);
+  background-size: cover;
+  background-position: center;
+  background-attachment: fixed;
   color: var(--text-color);
+  transition: background-color 0.4s ease, background-image 0.4s ease;
 }
 
 /* Navigation */
@@ -23,7 +111,7 @@ nav {
 }
 
 .nav-container {
-  max-width: 1200px;
+	max-width: var(--content-width);
   margin: 0 auto;
   display: flex;
   gap: 1rem;
@@ -40,13 +128,13 @@ nav {
 }
 
 .tab-btn:hover, .tab-btn.active {
-  color: #fff;
+	color: var(--accent);
   border-bottom: 2px solid var(--accent);
 }
 
 .tab-content {
   display: none;
-  max-width: 1200px;
+	max-width: var(--content-width);
   margin: 2rem auto;
   padding: 0 1rem;
   animation: fadeIn 0.3s ease;
@@ -75,9 +163,10 @@ nav {
 
 /* Cards (Generic) */
 .card {
-  background-color: var(--card-bg);
-  border-radius: 8px;
-  overflow: hidden;
+	background-color: transparent;
+	border: none;
+  border-radius: 0;
+	overflow: visible;
   text-decoration: none;
   color: inherit;
   transition: transform 0.2s;
@@ -85,9 +174,11 @@ nav {
   flex-direction: column;
 }
 
-.card:hover {
+
+.card:hover .thumb {
   transform: translateY(-5px);
-  box-shadow: 0 5px 15px rgba(0,0,0,0.5);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.9);
+  border-color: var(--accent);
 }
 
 .thumb {
@@ -96,8 +187,11 @@ nav {
 	background-size: 100% 100%;
   background-position: center;
   background-color: #333;
+	border-radius: 8px;
+  border: 1px solid var(--border-color);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.6);
+  transition: box-shadow 0.2s, border-color 0.2s;
   position: relative;
-	border-radius: 4px 4px 0 0;
 }
 
 .poster-thumb {
@@ -106,16 +200,22 @@ nav {
 }
 
 .card-info {
-  padding: 1rem;
-  text-align: center;
+	text-align: center;
+	padding: 0.3rem 0.2rem 0;
   display: flex;
   flex-direction: column;
-  align-items: center;
+	align-items: center;
 }
 
 .card-info h3 {
-  margin: 0 0 0.5rem 0;
-  font-size: 1.2rem;
+  margin: 0 0 2px 0;
+  font-size: 0.95rem;
+  font-weight: 400;
+  color: #bbb;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
 }
 
 .card-info .author {
@@ -125,10 +225,15 @@ nav {
   margin-bottom: 0.5rem;
 }
 
+.card-info .author:empty {
+  display: none; 
+}
+
 .rating {
   color: #ffd700;
   letter-spacing: 2px;
   font-size: 1.1rem;
+	padding: 0.0rem 0.0rem 0;
 }
 
 /* Game Card Specifics */
@@ -189,5 +294,5 @@ nav {
   height: 150px;
   border-radius: 50%;
   object-fit: cover;
-  border: 3px solid var(--accent);
+	border: 3px solid var(--accent);
 }
