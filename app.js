@@ -57,7 +57,7 @@ const myBooks = [
 { title: "Goodnight Punpun Vol. 1", author: "Inio Asano", rating: 3 },
 { title: "The Lost Weekend", author: "Charles Jackson", rating: 4 },
 { title: "The Last Question", author: "Isaac Asimov", rating: 3 },
-{ title: "Your Brain Is a Time Machine", author: "Dean Buonomano", rating: 2 },
+{ title: "Your Brain is a Time Machine", author: "Dean Buonomano", rating: 2 },
 { title: "No Longer Human", author: "Osamu Dazai", rating: 4 },
 { title: "Os 7 Maridos de Evelyn Hugo", author: "Taylor Jenkins Reid", rating: 3 },
 { title: "Every Frame a Rembrandt", author: "Andrew Laszlo", rating: 4 },
@@ -91,8 +91,8 @@ const translations = {
     "nav.games": "Jogos",
     "nav.books": "Livros",
     "nav.movies": "Filmes",
-    "home.hello": "Olá, sou o Matheus",
-    "home.bio": "Sou engenheiro gráfico",
+    "home.hello": "Matheus",
+    "home.bio": "Eu estudo engenharia",
     "books.title": "Lista de Leitura",
     "movies.title": "Lista de Filmes",
     "common.loading": "Carregando..."
@@ -103,8 +103,8 @@ const translations = {
     "nav.games": "Jeux",
     "nav.books": "Livres",
     "nav.movies": "Films",
-    "home.hello": "Bonjour, je suis Matheus",
-    "home.bio": "Je suis ingénieur",
+    "home.hello": "Matheus",
+    "home.bio": "J'étudie l'ingénierie",
     "books.title": "Liste de Lecture",
     "movies.title": "Liste de Visionnage",
     "common.loading": "Chargement..."
@@ -116,12 +116,9 @@ function applyLanguage() {
   const langCode = userLang.split('-')[0];
 
   if (!translations[langCode]) {
-    console.log(`Language ${langCode} not supported, using English default.`);
     return;
   }
 
-  console.log(`Applying translation for: ${langCode}`);
-  
   const dict = translations[langCode];
   document.querySelectorAll('[data-i18n]').forEach(el => {
     const key = el.getAttribute('data-i18n');
