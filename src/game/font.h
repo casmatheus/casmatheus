@@ -7,6 +7,8 @@
 #define ICON_JOYSTICK "\uE001"
 #define ICON_EXIT 		"\uE002"
 #define ICON_USER2    "\uE003"
+#define ICON_HOUSE    "\uE004"
+#define ICON_WIFI     "\uE005"
 
 using FontID = u32;
 

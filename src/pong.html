@@ -85,51 +85,94 @@
     	if (keyId > 0) Engine['_JSOnKeyUp'](keyId);
 		});
 
-	  var Network = {
-      peer: null,
-      connection: null,
-
-      initHost: function(hostId) {
-        this.peer = new Peer(hostId);
-        this.peer.on('connection', (conn) => {
-          this.setupConnection(conn);
-          console.log("Client connected to us!");
-        });
-      },
-
-      initClient: function(hostId) {
-        this.peer = new Peer();
-        this.peer.on('open', () => {
-          const conn = this.peer.connect(hostId, { reliable: false });
-          this.setupConnection(conn);
-          console.log("Connected to host!");
-        });
-      },
-
-      setupConnection: function(conn) {
-        this.connection = conn;
-        this.connection.serialization = 'none';
-
-        this.connection.on('data', (data) => {
-          const view = new Uint8Array(data);
-          const size = view.length;
-          
-          const ptr = Engine._malloc(size);
-
-          Engine.HEAPU8.set(view, ptr);
-          Engine._OnNetworkPacket(ptr, size);
-
-          Engine._free(ptr);
-        });
-      },
-
-      sendPacket: function(ptr, size) {
-        if (this.connection && this.connection.open) {
-          const dataView = new Uint8Array(Engine.HEAPU8.buffer, ptr, size);
-          this.connection.send(dataView);
+	var Network = {
+    peer: null,
+    connection: null,
+  
+    initHost: function(hostId) {
+      console.log("[Host] Starting Host with ID:", hostId);
+      this.peer = new Peer(hostId);
+      
+      this.peer.on('open', (id) => {
+        console.log("[Host] Registered on PeerJS server! ID:", id);
+      });
+  
+      this.peer.on('connection', (conn) => {
+        console.log("[Host] Incoming connection from client!");
+        this.setupConnection(conn);
+      });
+  
+      this.peer.on('error', (err) => {
+        console.error("[Host] PeerJS Error:", err);
+      });
+    },
+  
+    initClient: function(hostId) {
+      console.log("[Client] Starting Client, connecting to:", hostId);
+      this.peer = new Peer();
+      
+      this.peer.on('open', (id) => {
+        console.log("[Client] Registered on server. My ID:", id);
+        const conn = this.peer.connect(hostId);
+        this.setupConnection(conn);
+      });
+  
+      this.peer.on('error', (err) => {
+        console.error("[Client] PeerJS Error:", err);
+      });
+    },
+  
+    setupConnection: function(conn) {
+      this.connection = conn;
+  
+      const onOpen = () => {
+        console.log("[Network] WebRTC Data Channel OPEN AND READY!");
+        if (Engine._OnPeerConnected) {
+          Engine._OnPeerConnected();
+        } else {
+          console.error("Error: Engine._OnPeerConnected not found.");
         }
+      };
+  
+      if (this.connection.open) {
+        onOpen();
+      } else {
+        this.connection.on('open', onOpen);
       }
-	};  
+  
+      this.connection.on('data', (data) => {
+        const view = new Uint8Array(data);
+        const size = view.length;
+        
+        const ptr = Engine._malloc(size);
+        Engine.HEAPU8.set(view, ptr);
+        
+        if (Engine._OnNetworkPacket) {
+           Engine._OnNetworkPacket(ptr, size);
+        }
+        Engine._free(ptr);
+      });
+  
+		  this.connection.on('error', (err) => {
+        console.error("[Network] Connection Error:", err);
+        if (Engine._OnPeerDisconnected) Engine._OnPeerDisconnected();
+      });
+
+      this.connection.on('close', () => {
+        console.log("[Network] Connection Closed by Peer");
+        if (Engine._OnPeerDisconnected) Engine._OnPeerDisconnected();
+      });
+
+    },
+  
+    sendPacket: function(ptr, size) {
+      if (this.connection && this.connection.open) {
+        const wasmView = new Uint8Array(Engine.HEAPU8.buffer, ptr, size);
+        const safePacket = new Uint8Array(wasmView); 
+        this.connection.send(safePacket.buffer);
+      }
+    }
+  };
   </script>
     {{{ SCRIPT }}}
 </body>

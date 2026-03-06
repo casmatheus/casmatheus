@@ -71,7 +71,7 @@ $(ASSETS_DEST)/%: $(ASSETS_SRC)/%
 	@cp $< $@
 
 $(GAMES_DIR)/hands/index.html: LDFLAGS += -s EXPORTED_FUNCTIONS="['_main', '_GetHandLandmarksPointer', '_SetHandActive']" -s INITIAL_MEMORY=33554432
-$(GAMES_DIR)/pong/index.html: LDFLAGS += -s EXPORTED_FUNCTIONS="['_main', '_malloc', '_free']" -s INITIAL_MEMORY=2097152
+$(GAMES_DIR)/pong/index.html: LDFLAGS += -s EXPORTED_FUNCTIONS="['_main', '_malloc', '_free', '_OnNetworkPacket', '_OnPeerConnected', '_OnPeerDisconnected']" -s INITIAL_MEMORY=2097152
 
 $(GAMES_DIR)/%/index.html: src/%.cpp src/%.html $(ENGINE_OBJS) $(SHELL_FILE)
 	@echo [LINK] $* "($(MODE))"

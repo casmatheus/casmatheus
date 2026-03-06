@@ -66,7 +66,7 @@ struct GameState {
 	UITheme optionsTheme;
 	UITheme exitTheme;
 
-	enum class Scene: u8 { Menu, Playing, Pause, Settings, ModeSelect };
+	enum class Scene: u8 { Menu, Playing, Pause, Settings, ModeSelect, MultiplayerSelect, WaitingForConnection, OpponentPaused};
 	Scene currentScene = Scene::Menu;
 	Scene lastScene = Scene::Menu;
 
@@ -119,58 +119,22 @@ struct HostStatePacket {
   f32 ballX, ballY, ballVelX, ballVelY;
   f32 hostY, hostRot;
   i32 scoreP1, scoreP2;
+
+	f32 screenShake;
+  f32 bgScrollVelX;
+  f32 bgScrollVelY;
+  u8 audioTrigger;
+	u8 isPaused;
 };
 
 struct ClientInputPacket {
   u8 type = 1;
   f32 clientY, clientRotVel, clientRot;
+	u8 isPaused;
 };
 #pragma pack(pop)
 
 GameState game;
-
-extern "C" {
-  EMSCRIPTEN_KEEPALIVE
-  void ForceExit() {
-    logInfo("Page unloading, forcing cleanup...");
-		emscripten_cancel_main_loop();
-    Renderer::Destroy();
-  }
-
-	EMSCRIPTEN_KEEPALIVE
-  void OnNetworkPacket(u8* data, int size) {
-    if (size == 0) return;
-    u8 packetType = data[0];
-
-    if (packetType == 0 && size == sizeof(HostStatePacket)) {
-      HostStatePacket* packet = (HostStatePacket*)data;
-      if (game.mode == GameState::GameMode::OnlineClient) {
-        game.ball.x = packet->ballX;
-        game.ball.y = packet->ballY;
-        game.ball.velX = packet->ballVelX;
-        game.ball.velY = packet->ballVelY;
-        game.playerY = packet->hostY;
-        game.playerRot = packet->hostRot;
-        game.scorePlayer = packet->scoreP1;
-        game.scoreCpu = packet->scoreP2;
-      }
-    } 
-    else if (packetType == 1 && size == sizeof(ClientInputPacket)) {
-      ClientInputPacket* packet = (ClientInputPacket*)data;
-      if (game.mode == GameState::GameMode::OnlineHost) {
-        game.cpuY = packet->clientY;
-        game.cpuRotVel = packet->clientRotVel;
-        game.cpuRot = packet->clientRot;
-      }
-    }
-  }
-
-	EM_JS(void, SendNetworkDataJS, (void* data, int size), {
-  	if (typeof Network !== 'undefined') {
-    	Network.sendPacket(data, size);
-  	}
-	});
-}
 
 TextureID CreateSolidTexture(u8 r, u8 g, u8 b, u8 a) {
   u8 data[4] = {r, g, b, a};
@@ -178,6 +142,8 @@ TextureID CreateSolidTexture(u8 r, u8 g, u8 b, u8 a) {
 }
 
 void resetGame() {
+	Audio::StopAll();
+
   game.scorePlayer = 0;
   game.scoreCpu = 0;
 
@@ -208,6 +174,123 @@ void resetGame() {
   }
 
 	game.active = false;
+}
+
+extern "C" {
+  EMSCRIPTEN_KEEPALIVE
+  void ForceExit() {
+    logInfo("Page unloading, forcing cleanup...");
+		emscripten_cancel_main_loop();
+    Renderer::Destroy();
+  }
+
+	EMSCRIPTEN_KEEPALIVE
+  void OnNetworkPacket(u8* data, int size) {
+    if (size == 0) return;
+    u8 packetType = data[0];
+
+    if (packetType == 0 && size == sizeof(HostStatePacket)) {
+      HostStatePacket* packet = (HostStatePacket*)data;
+      if (game.mode == GameState::GameMode::OnlineClient) {
+        game.ball.x = packet->ballX;
+        game.ball.y = packet->ballY;
+        game.ball.velX = packet->ballVelX;
+        game.ball.velY = packet->ballVelY;
+        game.playerY = packet->hostY;
+        game.playerRot = packet->hostRot;
+        game.scorePlayer = packet->scoreP1;
+        game.scoreCpu = packet->scoreP2;
+
+				game.screenShake = packet->screenShake;
+        game.bgScrollVelX = packet->bgScrollVelX;
+        game.bgScrollVelY = packet->bgScrollVelY;
+
+        if (packet->audioTrigger == 1) Audio::Play(game.impact);
+        else if (packet->audioTrigger == 2) Audio::Play(game.cheer);
+        else if (packet->audioTrigger == 3) Audio::Play(game.cheer2);
+
+				if (packet->isPaused) {
+          if (game.currentScene == GameState::Scene::Playing) {
+            game.currentScene = GameState::Scene::OpponentPaused;
+          }
+        } else {
+          if (game.currentScene == GameState::Scene::OpponentPaused) {
+            game.currentScene = GameState::Scene::Playing;
+        	}
+				}
+
+      }
+    } 
+    else if (packetType == 1 && size == sizeof(ClientInputPacket)) {
+      ClientInputPacket* packet = (ClientInputPacket*)data;
+      if (game.mode == GameState::GameMode::OnlineHost) {
+        game.cpuY = packet->clientY;
+        game.cpuRotVel = packet->clientRotVel;
+        game.cpuRot = packet->clientRot;
+
+				if (packet->isPaused) {
+          if (game.currentScene == GameState::Scene::Playing) {
+            game.currentScene = GameState::Scene::OpponentPaused;
+          }
+        } else {
+          if (game.currentScene == GameState::Scene::OpponentPaused) {
+            game.currentScene = GameState::Scene::Playing;
+        	}
+        }
+
+      }
+    }
+  }
+
+	EMSCRIPTEN_KEEPALIVE
+  void OnPeerConnected() {
+    if (game.currentScene == GameState::Scene::WaitingForConnection) {
+      game.currentScene = GameState::Scene::Playing;
+      game.startTime = Instant::Now();
+    }
+  }
+
+	EMSCRIPTEN_KEEPALIVE
+  void OnPeerDisconnected() {
+    if (game.mode == GameState::GameMode::OnlineHost || game.mode == GameState::GameMode::OnlineClient) {
+      resetGame();
+      game.currentScene = GameState::Scene::Menu;
+      game.lastScene = GameState::Scene::Playing;
+    }
+  }
+
+	EM_JS(void, SendNetworkDataJS, (void* data, int size), {
+  	if (typeof Network !== 'undefined') {
+    	Network.sendPacket(data, size);
+  	}
+	});
+
+	EM_JS(void, StartHostJS, (), {
+    if (typeof Network !== 'undefined') {
+      var roomId = prompt("Enter the Room ID:");
+      alert("Your Room ID is: " + roomId + "\nShare this with your friend!");
+      Network.initHost(roomId);
+    }
+  });
+
+  EM_JS(void, StartClientJS, (), {
+    if (typeof Network !== 'undefined') {
+      var roomId = prompt("Enter the Room ID:");
+      if (roomId && roomId.trim() !== "") {
+        Network.initClient(roomId.trim());
+      }
+    }
+  });
+
+	EM_JS(void, DisconnectNetworkJS, (), {
+  	if (typeof Network !== 'undefined') {
+    	if (Network.connection) Network.connection.close();
+      if (Network.peer) { Network.peer.destroy(); Network.peer = null; }
+  	}
+	});
+
+
+
 }
 
 void initGame() {
@@ -345,172 +428,158 @@ void updateGame(f32 dt, f32 aspect) {
     }
   }
 
-  if (game.currentScene != GameState::Scene::Playing) return;
+	if (game.currentScene == GameState::Scene::Menu ||
+      game.currentScene == GameState::Scene::ModeSelect ||
+      game.currentScene == GameState::Scene::MultiplayerSelect) {
+    return; 
+  }
 
   game.animTime += dt;
 
-  constexpr f32 moveAcceleration = 15.0f;
-  constexpr f32 moveFriction = 10.0f;    	
-  constexpr f32 rotAcceleration = 80.0f;
-  constexpr f32 rotFriction = 10.0f;    	
-  constexpr f32 maxRot = 0.75f;
+  bool isLocalPaused = (game.currentScene == GameState::Scene::Pause || game.currentScene == GameState::Scene::Settings);
+  u8 currentAudioEvent = 0;
 
-  // Player 1 (Left Paddle) - Handled by Host or Local
-  if (game.mode != GameState::GameMode::OnlineClient) {
-    f32 input = Input::GetValue(0, ACTION_MOVE_UP) - Input::GetValue(0, ACTION_MOVE_DOWN);
-    game.playerVelY += input * moveAcceleration * dt;
-    game.playerVelY -= game.playerVelY * moveFriction * dt;
-    game.playerY += game.playerVelY * dt;
+  if (game.currentScene == GameState::Scene::Playing) {
+    constexpr f32 moveAcceleration = 15.0f;
+    constexpr f32 moveFriction = 10.0f;        
+    constexpr f32 rotAcceleration = 80.0f;
+    constexpr f32 rotFriction = 10.0f;        
+    constexpr f32 maxRot = 0.75f;
 
-    f32 rotateInput = Input::GetValue(0, ACTION_ROT_LEFT) - Input::GetValue(0, ACTION_ROT_RIGHT);
-    game.playerRotVel += rotateInput * rotAcceleration * dt;
-    game.playerRotVel -= game.playerRotVel * rotFriction * dt;
-    game.playerRot += game.playerRotVel * dt;
+    // Player 1 (Left Paddle)
+    if (game.mode != GameState::GameMode::OnlineClient) {
+      f32 input = Input::GetValue(0, ACTION_MOVE_UP) - Input::GetValue(0, ACTION_MOVE_DOWN);
+      game.playerVelY += input * moveAcceleration * dt;
+      game.playerVelY -= game.playerVelY * moveFriction * dt;
+      game.playerY += game.playerVelY * dt;
 
-    if (game.playerRot > maxRot)  { game.playerRot = maxRot; game.playerRotVel = 0.0f; }
-    if (game.playerRot < -maxRot) { game.playerRot = -maxRot; game.playerRotVel = 0.0f; }
-  }
+      f32 rotateInput = Input::GetValue(0, ACTION_ROT_LEFT) - Input::GetValue(0, ACTION_ROT_RIGHT);
+      game.playerRotVel += rotateInput * rotAcceleration * dt;
+      game.playerRotVel -= game.playerRotVel * rotFriction * dt;
+      game.playerRot += game.playerRotVel * dt;
 
-  // Player 2 / CPU (Right Paddle)
-  if (game.mode == GameState::GameMode::Single) {
-    // CPU AI Logic
-    f32 cpuSpeed = 1.3f;
-    f32 deadZone = 0.05f;
-    if (game.cpuY < game.ball.y - deadZone) game.cpuY += cpuSpeed * dt;
-    else if (game.cpuY > game.ball.y + deadZone) game.cpuY -= cpuSpeed * dt;
-    game.cpuRot = 0.0f;
-    game.cpuRotVel = 0.0f;
-    
-  } else if (game.mode == GameState::GameMode::Multi || game.mode == GameState::GameMode::OnlineClient) {
-    // Local P2 OR Online Client Input
-    // The Client reads P1 input mappings, but applies them to the Right Paddle, cpuY
-    int inputIdx = (game.mode == GameState::GameMode::OnlineClient) ? 0 : 1; 
-
-    f32 inputP2 = Input::GetValue(inputIdx, ACTION_MOVE_UP) - Input::GetValue(inputIdx, ACTION_MOVE_DOWN);
-    game.cpuVelY += inputP2 * moveAcceleration * dt;
-    game.cpuVelY -= game.cpuVelY * moveFriction * dt;
-    game.cpuY += game.cpuVelY * dt;
-
-    f32 rotP2 = Input::GetValue(inputIdx, ACTION_ROT_LEFT) - Input::GetValue(inputIdx, ACTION_ROT_RIGHT);
-    game.cpuRotVel += rotP2 * rotAcceleration * dt;
-    game.cpuRotVel -= game.cpuRotVel * rotFriction * dt;
-    game.cpuRot += game.cpuRotVel * dt;
-
-    if (game.cpuRot > maxRot)  { game.cpuRot = maxRot; game.cpuRotVel = 0.0f; }
-    if (game.cpuRot < -maxRot) { game.cpuRot = -maxRot; game.cpuRotVel = 0.0f; }
-    
-    if (game.mode == GameState::GameMode::OnlineClient) {
-      ClientInputPacket packet;
-      packet.clientY = game.cpuY;
-      packet.clientRotVel = game.cpuRotVel;
-      packet.clientRot = game.cpuRot;
-      SendNetworkDataJS(&packet, sizeof(packet));
-    }
-  }
-
-  game.paddleX = aspect - 0.2f;
-
-  f32 limit = 1.0f - (game.PADDLE_HEIGHT * 0.5f);
-  if (game.cpuY > limit) { game.cpuY = limit; game.cpuVelY = 0.0f; }
-  if (game.cpuY < -limit) { game.cpuY = -limit; game.cpuVelY = 0.0f; }
-  if (game.playerY > limit) { game.playerY = limit; game.playerVelY = 0.0f; }
-  if (game.playerY < -limit) { game.playerY = -limit; game.playerVelY = 0.0f; }
-
-  game.trail[game.trailIdx] = { game.ball.x, game.ball.y };
-  game.trailIdx = (game.trailIdx + 1) % 10;
-  
-  game.screenShake = game.screenShake > 0.0f ? game.screenShake - dt : 0.0f;
-
-  if (game.mode != GameState::GameMode::OnlineClient) {
-    game.ball.x += game.ball.velX * aspect * dt;
-    game.ball.y += game.ball.velY * dt;
-
-    if (game.ball.y > (1.0f - game.ball.radius)) {
-      game.ball.y = 1.0f - game.ball.radius;
-      game.ball.velY *= -1.0f;
-      Audio::Play(game.impact);
-    }
-    if (game.ball.y < (-1.0f + game.ball.radius)) {
-      game.ball.y = -1.0f + game.ball.radius;
-      game.ball.velY *= -1.0f;
-      Audio::Play(game.impact);
+      if (game.playerRot > maxRot)  { game.playerRot = maxRot; game.playerRotVel = 0.0f; }
+      if (game.playerRot < -maxRot) { game.playerRot = -maxRot; game.playerRotVel = 0.0f; }
     }
 
-    bool collision = false;
-    bool smash = false;
+    // Player 2 / CPU (Right Paddle)
+    if (game.mode == GameState::GameMode::Single) {
+      f32 cpuSpeed = 1.3f;
+      f32 deadZone = 0.05f;
+      if (game.cpuY < game.ball.y - deadZone) game.cpuY += cpuSpeed * dt;
+      else if (game.cpuY > game.ball.y + deadZone) game.cpuY -= cpuSpeed * dt;
+      game.cpuRot = 0.0f;
+      game.cpuRotVel = 0.0f;
+      
+    } else if (game.mode == GameState::GameMode::Multi || game.mode == GameState::GameMode::OnlineClient) {
+      int inputIdx = (game.mode == GameState::GameMode::OnlineClient) ? 0 : 1; 
+
+      f32 inputP2 = Input::GetValue(inputIdx, ACTION_MOVE_UP) - Input::GetValue(inputIdx, ACTION_MOVE_DOWN);
+      game.cpuVelY += inputP2 * moveAcceleration * dt;
+      game.cpuVelY -= game.cpuVelY * moveFriction * dt;
+      game.cpuY += game.cpuVelY * dt;
+
+      f32 rotP2 = Input::GetValue(inputIdx, ACTION_ROT_LEFT) - Input::GetValue(inputIdx, ACTION_ROT_RIGHT);
+      game.cpuRotVel += rotP2 * rotAcceleration * dt;
+      game.cpuRotVel -= game.cpuRotVel * rotFriction * dt;
+      game.cpuRot += game.cpuRotVel * dt;
+
+      if (game.cpuRot > maxRot)  { game.cpuRot = maxRot; game.cpuRotVel = 0.0f; }
+      if (game.cpuRot < -maxRot) { game.cpuRot = -maxRot; game.cpuRotVel = 0.0f; }
+    }
+
+    game.paddleX = aspect - 0.2f;
+
+    f32 limit = 1.0f - (game.PADDLE_HEIGHT * 0.5f);
+    if (game.cpuY > limit) { game.cpuY = limit; game.cpuVelY = 0.0f; }
+    if (game.cpuY < -limit) { game.cpuY = -limit; game.cpuVelY = 0.0f; }
+    if (game.playerY > limit) { game.playerY = limit; game.playerVelY = 0.0f; }
+    if (game.playerY < -limit) { game.playerY = -limit; game.playerVelY = 0.0f; }
+
+    game.trail[game.trailIdx] = { game.ball.x, game.ball.y };
+    game.trailIdx = (game.trailIdx + 1) % 10;
     
-    if (game.ball.x < -game.paddleX + game.PADDLE_WIDTH && game.ball.x > -game.paddleX - game.PADDLE_WIDTH) {
-      if (Abs(game.ball.y - game.playerY) < (game.PADDLE_HEIGHT * 0.5f + game.ball.radius)) {
-        game.ball.x = -game.paddleX + game.PADDLE_WIDTH + 0.01f;
-        collision = true;
-        game.ball.velY += game.playerRot * 2.0f;
-        smash = (game.playerRotVel > 0.2f) || (game.playerRotVel < -0.2f);
+    game.screenShake = game.screenShake > 0.0f ? game.screenShake - dt : 0.0f;
+
+    if (game.mode != GameState::GameMode::OnlineClient) {
+      game.ball.x += game.ball.velX * aspect * dt;
+      game.ball.y += game.ball.velY * dt;
+          
+      if (game.ball.y > (1.0f - game.ball.radius)) {
+        game.ball.y = 1.0f - game.ball.radius;
+        game.ball.velY *= -1.0f;
+        Audio::Play(game.impact);
+        currentAudioEvent = 1;
       }
-    }
-
-    // P2 Paddle Collision
-    if (game.ball.x > game.paddleX - game.PADDLE_WIDTH && game.ball.x < game.paddleX + game.PADDLE_WIDTH) {
-      if (Abs(game.ball.y - game.cpuY) < (game.PADDLE_HEIGHT * 0.5f + game.ball.radius)) {
-        game.ball.x = game.paddleX - game.PADDLE_WIDTH - 0.01f;
-        collision = true;
-        game.ball.velY += game.cpuRot * 2.0f;
-        smash = (game.cpuRotVel > 0.2f) || (game.cpuRotVel < -0.2f);
+      if (game.ball.y < (-1.0f + game.ball.radius)) {
+        game.ball.y = -1.0f + game.ball.radius;
+        game.ball.velY *= -1.0f;
+        Audio::Play(game.impact);
+        currentAudioEvent = 1;
       }
-    }
 
-    // Paddle Collision
-    if (collision) {
-      game.ball.velX *= -1.0f;
-      if (smash) {
-        game.ball.velX *= 1.4f;
-        game.screenShake = 0.5f;
-        f32 speed = sqrt(game.ball.velX * game.ball.velX + game.ball.velY * game.ball.velY);
-        if (speed > 0.001f) {
-          game.bgScrollVelX = -(game.ball.velX / speed) * 1.1f;
-          game.bgScrollVelY = -(game.ball.velY / speed) * 1.1f;
+      bool collision = false;
+      bool smash = false;
+      
+      if (game.ball.x < -game.paddleX + game.PADDLE_WIDTH && game.ball.x > -game.paddleX - game.PADDLE_WIDTH) {
+        if (Abs(game.ball.y - game.playerY) < (game.PADDLE_HEIGHT * 0.5f + game.ball.radius)) {
+          game.ball.x = -game.paddleX + game.PADDLE_WIDTH + 0.01f;
+          collision = true;
+          game.ball.velY += game.playerRot * 2.0f;
+          smash = (game.playerRotVel > 0.2f) || (game.playerRotVel < -0.2f);
         }
       }
 
-      f32 cap = smash ? GameState::SMASH_VELOCITY : GameState::MAX_VELOCITY;
-      if (Abs(game.ball.velX) > cap) game.ball.velX = (game.ball.velX > 0 ? 1.0f : -1.0f) * cap;
-      if (Abs(game.ball.velY) > cap) game.ball.velY = (game.ball.velY > 0 ? 1.0f : -1.0f) * cap;
-
-      Audio::Play(game.impact);
-    }
-    
-    // Point
-    if (game.ball.x < -aspect - 0.2f || game.ball.x > aspect + 0.2f) {
-      f32 dir = 1.0f;
-      if (game.ball.x > 0.0f) {
-        game.scorePlayer++;
-        dir = -1.0f;
-      } else {
-        game.scoreCpu++;
-        dir = 1.0f;
+      if (game.ball.x > game.paddleX - game.PADDLE_WIDTH && game.ball.x < game.paddleX + game.PADDLE_WIDTH) {
+        if (Abs(game.ball.y - game.cpuY) < (game.PADDLE_HEIGHT * 0.5f + game.ball.radius)) {
+          game.ball.x = game.paddleX - game.PADDLE_WIDTH - 0.01f;
+          collision = true;
+          game.ball.velY += game.cpuRot * 2.0f;
+          smash = (game.cpuRotVel > 0.2f) || (game.cpuRotVel < -0.2f);
+        }
       }
 
-      game.ball.x = 0;
-      game.ball.y = 0;
-      game.ball.velX = GameState::INITIAL_VELX * dir; 
-      game.ball.velY = GameState::INITIAL_VELY;
+      if (collision) {
+        game.ball.velX *= -1.0f;
+        if (smash) {
+          game.ball.velX *= 1.4f;
+          game.screenShake = 0.5f;
+          f32 speed = sqrt(game.ball.velX * game.ball.velX + game.ball.velY * game.ball.velY);
+          if (speed > 0.001f) {
+            game.bgScrollVelX = -(game.ball.velX / speed) * 1.1f;
+            game.bgScrollVelY = -(game.ball.velY / speed) * 1.1f;
+          }
+        }
 
-      bool cheerPick = (int)game.startTime.elapsed().asSeconds() % 2;
-      Audio::Play(cheerPick ? game.cheer : game.cheer2);
-    }
+        f32 cap = smash ? GameState::SMASH_VELOCITY : GameState::MAX_VELOCITY;
+        if (Abs(game.ball.velX) > cap) game.ball.velX = (game.ball.velX > 0 ? 1.0f : -1.0f) * cap;
+        if (Abs(game.ball.velY) > cap) game.ball.velY = (game.ball.velY > 0 ? 1.0f : -1.0f) * cap;
 
-    if (game.mode == GameState::GameMode::OnlineHost) {
-      HostStatePacket packet;
-      packet.ballX = game.ball.x;
-      packet.ballY = game.ball.y;
-      packet.ballVelX = game.ball.velX;
-      packet.ballVelY = game.ball.velY;
-      packet.hostY = game.playerY;
-      packet.hostRot = game.playerRot;
-      packet.scoreP1 = game.scorePlayer;
-      packet.scoreP2 = game.scoreCpu;
-      SendNetworkDataJS(&packet, sizeof(packet));
+        Audio::Play(game.impact);
+        currentAudioEvent = 1;
+      }
+      
+      if (game.ball.x < -aspect - 0.2f || game.ball.x > aspect + 0.2f) {
+        f32 dir = 1.0f;
+        if (game.ball.x > 0.0f) {
+          game.scorePlayer++;
+          dir = -1.0f;
+        } else {
+          game.scoreCpu++;
+          dir = 1.0f;
+        }
+
+        game.ball.x = 0;
+        game.ball.y = 0;
+        game.ball.velX = GameState::INITIAL_VELX * dir; 
+        game.ball.velY = GameState::INITIAL_VELY;
+
+        bool cheerPick = (int)game.startTime.elapsed().asSeconds() % 2;
+        Audio::Play(cheerPick ? game.cheer : game.cheer2);
+        currentAudioEvent = cheerPick ? 2 : 3;
+      }
     }
-  }
+  } 
 
   game.bgScrollX += game.bgScrollVelX * dt;
   game.bgScrollY += game.bgScrollVelY * dt;
@@ -518,6 +587,33 @@ void updateGame(f32 dt, f32 aspect) {
   game.bgScrollVelY *= 0.95f;
   if (Abs(game.bgScrollVelX) < 0.001f) game.bgScrollVelX = 0.0f;
   if (Abs(game.bgScrollVelY) < 0.001f) game.bgScrollVelY = 0.0f;
+
+  if (game.mode == GameState::GameMode::OnlineClient) {
+    ClientInputPacket packet;
+    packet.clientY = game.cpuY;
+    packet.clientRotVel = game.cpuRotVel;
+    packet.clientRot = game.cpuRot;
+    packet.isPaused = isLocalPaused ? 1 : 0;
+    SendNetworkDataJS(&packet, sizeof(packet));
+  }
+
+  if (game.mode == GameState::GameMode::OnlineHost) {
+    HostStatePacket packet;
+    packet.ballX = game.ball.x;
+    packet.ballY = game.ball.y;
+    packet.ballVelX = game.ball.velX;
+    packet.ballVelY = game.ball.velY;
+    packet.hostY = game.playerY;
+    packet.hostRot = game.playerRot;
+    packet.scoreP1 = game.scorePlayer;
+    packet.scoreP2 = game.scoreCpu;
+    packet.screenShake = game.screenShake;
+    packet.bgScrollVelX = game.bgScrollVelX;
+    packet.bgScrollVelY = game.bgScrollVelY;
+    packet.audioTrigger = currentAudioEvent;
+    packet.isPaused = isLocalPaused ? 1 : 0;
+    SendNetworkDataJS(&packet, sizeof(packet));
+  }
 }
 
 void renderLoop(void* arg) {
@@ -616,6 +712,7 @@ void renderLoop(void* arg) {
 
   if (game.currentScene == GameState::Scene::Playing 
 	 || game.currentScene == GameState::Scene::Pause 
+	 || game.currentScene == GameState::Scene::OpponentPaused
 	 || (game.currentScene == GameState::Scene::Settings && game.lastScene == GameState::Scene::Pause)) {
 
 
@@ -787,6 +884,11 @@ void renderLoop(void* arg) {
     yPos += spaceBetween;
 
     if (UI::Button("Exit to Menu " ICON_EXIT, centerX, yPos, btnW, btnH, &game.exitTheme)) {
+
+			if (game.mode == GameState::GameMode::OnlineHost || game.mode == GameState::GameMode::OnlineClient) {
+        DisconnectNetworkJS();
+      }
+
 			resetGame();
       game.currentScene = GameState::Scene::Menu;
 			game.lastScene = GameState::Scene::Pause;
@@ -914,27 +1016,126 @@ void renderLoop(void* arg) {
 
 		yPos += spaceBetween;
 
-    if (UI::Button("Multiplayer " ICON_USER2, centerX, yPos, btnW, btnH, &game.startTheme)) {
-			resetGame();
-			game.mode = GameState::GameMode::Multi;
-      game.currentScene = GameState::Scene::Playing;
+    if (UI::Button("Multiplayer " ICON_USER2, centerX, yPos, btnW, btnH, &game.optionsTheme)) {
+			game.currentScene = GameState::Scene::MultiplayerSelect;
 			game.lastScene = GameState::Scene::ModeSelect;
-			game.active = true;
     }
 
 		yPos += spaceBetween;
 
     if (UI::Button("Back " ICON_EXIT, centerX, yPos, btnW, btnH, &game.exitTheme)) {
-      game.currentScene = game.lastScene;
+      game.currentScene = GameState::Scene::Menu;
 			game.lastScene = GameState::Scene::ModeSelect;
     }
 
 
 	  UI::End();
-	}
+	} else if (game.currentScene == GameState::Scene::MultiplayerSelect) {
+		SpriteRenderer::EndFrame();
+		UI::Begin(dt, winW, winH, virtualW, virtualH);
+
+		f32 btnW = 400.0f;
+		f32 btnH = 80.0f;
+		f32 spaceBetween = 120.0f;
+		f32 centerX = (f32)virtualW / 2.0f - (btnW / 2.0f);
+
+		f32 totalHeight = spaceBetween * 3 + btnH;
+		f32 yPos = (f32)virtualH / 2.0f - (totalHeight / 2.0f);
+
+		f32 dim[] = {0,0,0,0.7f};
+		ShapeRenderer::DrawRect(0, 0, (f32)virtualW, (f32)virtualH, dim);
+
+		if (UI::Button("Local Play " ICON_USER2, centerX, yPos, btnW, btnH, &game.startTheme)) {
+			resetGame();
+			game.mode = GameState::GameMode::Multi;
+			game.currentScene = GameState::Scene::Playing;
+			game.lastScene = GameState::Scene::MultiplayerSelect;
+			game.active = true;
+		}
+
+		yPos += spaceBetween;
+
+		if (UI::Button("Create Room " ICON_HOUSE, centerX, yPos, btnW, btnH, &game.optionsTheme)) {
+			resetGame();
+			game.mode = GameState::GameMode::OnlineHost;
+			game.currentScene = GameState::Scene::WaitingForConnection;
+			game.lastScene = GameState::Scene::MultiplayerSelect;
+			game.active = true;
+			StartHostJS();
+		}
+
+		yPos += spaceBetween;
+
+		if (UI::Button("Join Room " ICON_WIFI, centerX, yPos, btnW, btnH, &game.optionsTheme)) {
+			resetGame();
+			game.mode = GameState::GameMode::OnlineClient;
+			game.currentScene = GameState::Scene::WaitingForConnection;
+			game.lastScene = GameState::Scene::MultiplayerSelect;
+			game.active = true;
+			StartClientJS();
+		}
+
+		yPos += spaceBetween;
+
+		if (UI::Button("Back " ICON_EXIT, centerX, yPos, btnW, btnH, &game.exitTheme)) {
+			game.currentScene = game.lastScene;
+			game.lastScene = GameState::Scene::MultiplayerSelect;
+		}
+
+		UI::End();
+  } else if (game.currentScene == GameState::Scene::WaitingForConnection) {
+    SpriteRenderer::EndFrame();
+    
+    UI::Begin(dt, winW, winH, virtualW, virtualH);
+
+    TextRenderer::BeginFrame(virtualW, virtualH);
+    const char* waitText = "Waiting for connection...";
+    f32 fontSize = 50.0f;
+    f32 w = TextRenderer::MeasureText(game.font, waitText, fontSize);
+    TextRenderer::DrawText(game.font, waitText, (virtualW / 2.0f) - (w / 2.0f), virtualH / 2.0f - 80.0f, fontSize, (f32[]){1, 1, 1, 1});
+    TextRenderer::EndFrame();
+
+    f32 btnW = 400.0f;
+    f32 btnH = 80.0f;
+    f32 centerX = (f32)virtualW / 2.0f - (btnW / 2.0f);
+    f32 yPos = virtualH / 2.0f + 20.0f;
+
+    if (UI::Button("Cancel " ICON_EXIT, centerX, yPos, btnW, btnH, &game.exitTheme)) {
+      DisconnectNetworkJS();
+      resetGame();
+      game.currentScene = GameState::Scene::MultiplayerSelect;
+    }
+
+    UI::End();
+  } else if (game.currentScene == GameState::Scene::OpponentPaused) {
+    UI::Begin(dt, winW, winH, virtualW, virtualH);
+
+    f32 btnW = 400.0f;
+    f32 btnH = 80.0f;
+    f32 centerX = (f32)virtualW / 2.0f - (btnW / 2.0f);
+    f32 yPos = (f32)virtualH / 2.0f;
+
+    f32 dim[] = {0,0,0,0.7f};
+    ShapeRenderer::DrawRect(0, 0, (f32)virtualW, (f32)virtualH, dim);
+
+    TextRenderer::BeginFrame(virtualW, virtualH);
+    const char* waitText = "Opponent Paused...";
+    f32 fontSize = 50.0f;
+    f32 textW = TextRenderer::MeasureText(game.font, waitText, fontSize);
+    TextRenderer::DrawText(game.font, waitText, (virtualW / 2.0f) - (textW / 2.0f), yPos - 100.0f, fontSize, (f32[]){1, 1, 1, 1});
+    TextRenderer::EndFrame();
+
+    if (UI::Button("Disconnect " ICON_EXIT, centerX, yPos, btnW, btnH, &game.exitTheme)) {
+      DisconnectNetworkJS();
+      resetGame();
+      game.currentScene = GameState::Scene::Menu;
+    }
+
+    UI::End();
+  }
 
   Renderer::EndFrame();
-	Input::EndFrame();
+  Input::EndFrame();
 }
 
 int main() {
