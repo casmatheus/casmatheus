@@ -171,7 +171,7 @@ function loadGames() {
   grid.innerHTML = '';
 
   myGames.forEach(game => {
-    const imagePath = `assets/thumbs/${sanitizeFilename(game.title)}.jpg`;
+    const imagePath = `Assets/thumbs/${sanitizeFilename(game.title)}.jpg`;
 
     const badgesHtml = (game.tags || []).map(tag => {
       const iconClass = iconMap[tag.toLowerCase()] || 'fa-solid fa-question';
@@ -207,7 +207,7 @@ function loadMovies() {
     grid.innerHTML = '';
 
     myMovies.forEach(movie => {
-        const imagePath = `assets/movies/${sanitizeFilename(movie.title)}.jpg`;
+        const imagePath = `Assets/movies/${sanitizeFilename(movie.title)}.jpg`;
         
         const card = createCard({
             title: movie.title,
@@ -230,7 +230,7 @@ function loadBooks() {
     const card = createCard({
       title: book.title,
       subtitle: book.author,
-      imagePath: `assets/books/${safeFilename}.jpg`,
+      imagePath: `Assets/books/${safeFilename}.jpg`,
       rating: book.rating,
       isPoster: true
     });
