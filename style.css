@@ -35,7 +35,7 @@ body.theme-home #constellation-canvas {
 body.theme-games {
   --bg-color: #02040a; 
   --accent: #ffd700;   
-  --border-color: #0f1b3d;
+  --border-color: #967935;
 
   background-color: var(--bg-color);
 
